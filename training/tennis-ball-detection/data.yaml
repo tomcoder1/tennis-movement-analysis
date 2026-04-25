@@ -1,0 +1,5 @@
+names:
+- tennis ball
+nc: 1
+train: tennis-ball-detection-1/train/images
+val: tennis-ball-detection-1/valid/images
