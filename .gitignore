@@ -1,4 +1,4 @@
 /runs/
-
-*.pt
+/training/
 .venv
+/__pycache__/
