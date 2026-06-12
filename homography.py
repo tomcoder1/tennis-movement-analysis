@@ -8,11 +8,6 @@ from typing import Dict, List, Optional, Tuple
 import cv2
 import numpy as np
 
-
-# ============================================================
-# CONFIG
-# ============================================================
-
 COURT_CSV = "outputs/court.csv"
 BALL_CSV = "outputs/ball.csv"
 PLAYER_CSV = "outputs/player.csv"
@@ -21,25 +16,6 @@ HOMOGRAPHY_CSV = "outputs/homography.csv"
 BALL_HOMOGRAPHY_CSV = "outputs/ball_homography.csv"
 PLAYER_HOMOGRAPHY_CSV = "outputs/player_homography.csv"
 
-# Normalized doubles-court plane:
-# x = 0.0 left doubles sideline, x = 1.0 right doubles sideline
-# y = 0.0 far baseline,        y = 1.0 near baseline
-#
-# If you know the exact meaning of court_0, court_1, ... from your court model,
-# fill this dictionary. The code will prefer this exact ID mapping because it is
-# the most accurate way to compute homography.
-#
-# Example:
-# COURT_TEMPLATE_BY_ID = {
-#     "court_0": (0.0, 0.0),
-#     "court_1": (1.0, 0.0),
-#     "court_2": (1.0, 1.0),
-#     "court_3": (0.0, 1.0),
-# }
-# Keypoint mapping from the court model labels shown in the overlay image.
-# Normalized doubles-court plane:
-# x = 0.0 left doubles sideline, x = 1.0 right doubles sideline
-# y = 0.0 far baseline,        y = 1.0 near baseline
 SINGLES_LEFT = 4.5 / 36.0
 SINGLES_RIGHT = 31.5 / 36.0
 FAR_SERVICE_Y = 18.0 / 78.0
@@ -48,25 +24,21 @@ NEAR_SERVICE_Y = 60.0 / 78.0
 CENTER_X = 0.5
 
 COURT_TEMPLATE_BY_ID: Dict[str, Tuple[float, float]] = {
-    # Doubles outer corners
     "court_0": (0.0, 0.0),
     "court_1": (1.0, 0.0),
     "court_2": (0.0, 1.0),
     "court_3": (1.0, 1.0),
 
-    # Singles sideline intersections with baselines
     "court_4": (SINGLES_LEFT, 0.0),
     "court_5": (SINGLES_LEFT, 1.0),
     "court_6": (SINGLES_RIGHT, 0.0),
     "court_7": (SINGLES_RIGHT, 1.0),
 
-    # Service line intersections with singles sidelines
     "court_8": (SINGLES_LEFT, FAR_SERVICE_Y),
     "court_9": (SINGLES_RIGHT, FAR_SERVICE_Y),
     "court_10": (SINGLES_LEFT, NEAR_SERVICE_Y),
     "court_11": (SINGLES_RIGHT, NEAR_SERVICE_Y),
 
-    # Center service line and net points
     "court_12": (CENTER_X, FAR_SERVICE_Y),
     "court_13": (CENTER_X, NEAR_SERVICE_Y),
     "court_14": (CENTER_X, NET_Y),
@@ -79,11 +51,6 @@ MAX_COURT_POINT_OUTSIDE_RATIO = 0.35
 COURT_POINT_MARGIN = 0.35
 REUSE_LAST_VALID_H = True
 
-
-# ============================================================
-# DATA STRUCTURES
-# ============================================================
-
 @dataclass
 class HomographyResult:
     H: Optional[np.ndarray]
@@ -93,22 +60,15 @@ class HomographyResult:
     reprojection_error: Optional[float]
     timestamp: float
 
-
-# ============================================================
-# CSV HELPERS
-# ============================================================
-
 def parse_float(value):
     if value is None or value == "":
         return None
     return float(value)
 
-
 def parse_int(value, default=0):
     if value is None or value == "":
         return default
     return int(value)
-
 
 def load_csv_by_frame(csv_path):
     by_frame = defaultdict(list)
@@ -140,16 +100,10 @@ def load_csv_by_frame(csv_path):
 
     return by_frame
 
-
 def valid_xy(row):
     x = row.get("x")
     y = row.get("y")
     return x is not None and y is not None and np.isfinite(x) and np.isfinite(y)
-
-
-# ============================================================
-# HOMOGRAPHY HELPERS
-# ============================================================
 
 def normalize_homography(H):
     if H is None:
@@ -171,7 +125,6 @@ def normalize_homography(H):
 
     return H
 
-
 def transform_points(H, points):
     if H is None or len(points) == 0:
         return np.empty((0, 2), dtype=np.float32)
@@ -179,7 +132,6 @@ def transform_points(H, points):
     pts = np.asarray(points, dtype=np.float32).reshape(-1, 1, 2)
     warped = cv2.perspectiveTransform(pts, H)
     return warped.reshape(-1, 2)
-
 
 def transform_point(H, x, y):
     if H is None or x is None or y is None:
@@ -198,7 +150,6 @@ def transform_point(H, x, y):
 
     return court_x, court_y
 
-
 def reprojection_error(H, image_points, template_points):
     if H is None or len(image_points) == 0:
         return None
@@ -211,7 +162,6 @@ def reprojection_error(H, image_points, template_points):
 
     errors = np.linalg.norm(projected - target, axis=1)
     return float(np.mean(errors))
-
 
 def collect_image_points(court_points):
     points = []
@@ -226,7 +176,6 @@ def collect_image_points(court_points):
 
     arr = np.asarray(points, dtype=np.float32).reshape(-1, 2)
 
-    # Remove duplicate or near-duplicate points. They can make the hull unstable.
     unique = []
     for pt in arr:
         if not unique:
@@ -239,14 +188,11 @@ def collect_image_points(court_points):
 
     return np.asarray(unique, dtype=np.float32).reshape(-1, 2)
 
-
 def polygon_area(points):
     points = np.asarray(points, dtype=np.float32).reshape(-1, 1, 2)
     return abs(float(cv2.contourArea(points)))
 
-
 def order_quad_for_court(points):
-    """Return points as top-left, top-right, bottom-right, bottom-left."""
     pts = np.asarray(points, dtype=np.float32).reshape(4, 2)
 
     by_y = pts[np.argsort(pts[:, 1])]
@@ -285,14 +231,6 @@ def order_quad_for_court(points):
 
 
 def estimate_outer_quad_from_points(points):
-    """Estimate the visible outer court quadrilateral from court keypoints.
-
-    The previous version picked four extreme points directly. That can break when
-    an inner service-line point is slightly more extreme than the real corner.
-    This version first takes the convex hull, then searches for the largest sane
-    quadrilateral on that hull. It is still a fallback, but it is much harder for
-    one bad point to destroy the homography.
-    """
     pts = np.asarray(points, dtype=np.float32).reshape(-1, 2)
 
     if len(pts) < 4:
@@ -306,8 +244,6 @@ def estimate_outer_quad_from_points(points):
     best_quad = None
     best_score = -1.0
 
-    # Court models usually output about 14 or 15 points, so exhaustive search is
-    # cheap and more reliable than cv2.approxPolyDP for this use case.
     for combo in itertools.combinations(hull, 4):
         quad = order_quad_for_court(combo)
         if quad is None:
@@ -320,7 +256,6 @@ def estimate_outer_quad_from_points(points):
         left_height = np.linalg.norm(quad[3] - quad[0])
         right_height = np.linalg.norm(quad[2] - quad[1])
 
-        # Prefer large quads, but avoid very skewed one-point-outlier quads.
         width_balance = min(top_width, bottom_width) / max(top_width, bottom_width, 1.0)
         height_balance = min(left_height, right_height) / max(left_height, right_height, 1.0)
         score = area * (0.50 + 0.25 * width_balance + 0.25 * height_balance)
@@ -332,7 +267,6 @@ def estimate_outer_quad_from_points(points):
     if best_quad is not None:
         return best_quad.astype(np.float32)
 
-    # Last fallback: classic image-coordinate corners.
     sums = pts[:, 0] + pts[:, 1]
     diffs = pts[:, 0] - pts[:, 1]
 
@@ -347,7 +281,6 @@ def estimate_outer_quad_from_points(points):
     )
 
     return order_quad_for_court(rough_quad)
-
 
 def validate_homography_with_court_points(H, image_points):
     if H is None or len(image_points) < 4:
@@ -370,7 +303,6 @@ def validate_homography_with_court_points(H, image_points):
 
     outside_ratio = 1.0 - (float(np.count_nonzero(inside)) / float(len(warped)))
     return outside_ratio <= MAX_COURT_POINT_OUTSIDE_RATIO
-
 
 def build_homography_from_template(court_points):
     image_points = []
@@ -420,7 +352,6 @@ def build_homography_from_template(court_points):
         reprojection_error=err,
         timestamp=timestamp,
     )
-
 
 def build_homography_from_auto_quad(court_points):
     image_points = collect_image_points(court_points)
@@ -472,7 +403,6 @@ def build_homography_from_auto_quad(court_points):
         timestamp=timestamp,
     )
 
-
 def build_homography(court_points):
     if COURT_TEMPLATE_BY_ID:
         result = build_homography_from_template(court_points)
@@ -480,7 +410,6 @@ def build_homography(court_points):
             return result
 
     return build_homography_from_auto_quad(court_points)
-
 
 def build_homographies_by_frame(court_by_frame, all_frame_ids):
     homography_by_frame: Dict[int, HomographyResult] = {}
@@ -512,11 +441,6 @@ def build_homographies_by_frame(court_by_frame, all_frame_ids):
             homography_by_frame[frame_id] = result
 
     return homography_by_frame
-
-
-# ============================================================
-# SAVE OUTPUTS
-# ============================================================
 
 def write_homography_csv(homography_by_frame):
     os.makedirs(os.path.dirname(HOMOGRAPHY_CSV), exist_ok=True)
@@ -560,7 +484,6 @@ def write_homography_csv(homography_by_frame):
                 *values,
             ])
 
-
 def write_ball_homography_csv(ball_by_frame, homography_by_frame):
     os.makedirs(os.path.dirname(BALL_HOMOGRAPHY_CSV), exist_ok=True)
 
@@ -598,7 +521,6 @@ def write_ball_homography_csv(ball_by_frame, homography_by_frame):
                     1 if valid else 0,
                     row.get("confidence", 0.0),
                 ])
-
 
 def write_player_homography_csv(player_by_frame, homography_by_frame):
     os.makedirs(os.path.dirname(PLAYER_HOMOGRAPHY_CSV), exist_ok=True)
@@ -641,11 +563,6 @@ def write_player_homography_csv(player_by_frame, homography_by_frame):
                     row.get("confidence", 0.0),
                     row.get("track_id", ""),
                 ])
-
-
-# ============================================================
-# MAIN ENTRYPOINT
-# ============================================================
 
 def run_homography():
     court_by_frame = load_csv_by_frame(COURT_CSV)

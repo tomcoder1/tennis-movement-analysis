@@ -4,18 +4,13 @@ import math
 import cv2
 from collections import defaultdict
 
-
-# ============================================================
-# CONFIG
-# ============================================================
-
 BALL_CSV = "outputs/ball.csv"
 COURT_CSV = "outputs/court.csv"
 PLAYER_CSV = "outputs/player.csv"
 BALL_HOMOGRAPHY_CSV = "outputs/ball_homography.csv"
 PLAYER_HOMOGRAPHY_CSV = "outputs/player_homography.csv"
 
-OUTPUT_VIDEO_PATH = "outputs/detections_overlay.mp4"
+OUTPUT_VIDEO_PATH = "outputs/out.mp4"
 
 BALL_COLOR = (0, 255, 255)
 PLAYER_COLOR = (0, 255, 0)
@@ -38,19 +33,10 @@ HOMOGRAPHY_PLAYER_RADIUS = 5
 
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 
-# Mini-court viewport.
-# The real court is still normalized as x=[0,1], y=[0,1].
-# These limits intentionally include space outside the court, so the ball/player
-# can appear outside the court instead of being clamped to the court border.
 HOMOGRAPHY_VIEW_X_MIN = -0.50
 HOMOGRAPHY_VIEW_X_MAX = 1.50
 HOMOGRAPHY_VIEW_Y_MIN = -0.85
 HOMOGRAPHY_VIEW_Y_MAX = 1.35
-
-
-# ============================================================
-# CSV LOADING
-# ============================================================
 
 def parse_float(value):
     if value is None or value == "":
@@ -66,7 +52,6 @@ def parse_float(value):
 
     return value
 
-
 def parse_int(value, default=0):
     if value is None or value == "":
         return default
@@ -75,7 +60,6 @@ def parse_int(value, default=0):
         return int(float(value))
     except (TypeError, ValueError):
         return default
-
 
 def load_csv_by_frame(csv_path):
     detections_by_frame = defaultdict(list)
@@ -106,7 +90,6 @@ def load_csv_by_frame(csv_path):
             detections_by_frame[frame_id].append(det)
 
     return detections_by_frame
-
 
 def load_ball_by_frame(csv_path):
     ball_by_frame = {}
@@ -139,7 +122,6 @@ def load_ball_by_frame(csv_path):
 
     return ball_by_frame
 
-
 def load_ball_homography_by_frame(csv_path):
     ball_by_frame = {}
 
@@ -167,7 +149,6 @@ def load_ball_homography_by_frame(csv_path):
             }
 
     return ball_by_frame
-
 
 def load_player_homography_by_frame(csv_path):
     players_by_frame = defaultdict(list)
@@ -199,11 +180,6 @@ def load_player_homography_by_frame(csv_path):
 
     return players_by_frame
 
-
-# ============================================================
-# BASIC DRAW HELPERS
-# ============================================================
-
 def draw_header(frame, frame_id, timestamp):
     cv2.putText(
         frame,
@@ -216,7 +192,6 @@ def draw_header(frame, frame_id, timestamp):
         cv2.LINE_AA,
     )
 
-
 def draw_player(frame, det):
     x = int(round(det["x"]))
     y = int(round(det["y"]))
@@ -227,13 +202,12 @@ def draw_player(frame, det):
     y2 = y + h
 
     label = det["object_id"]
-    conf = det["confidence"]
 
     cv2.rectangle(frame, (x, y), (x2, y2), PLAYER_COLOR, 2)
 
     cv2.putText(
         frame,
-        f"{label} {conf:.2f}",
+        label,
         (x, max(20, y - 8)),
         FONT,
         0.5,
@@ -242,18 +216,16 @@ def draw_player(frame, det):
         cv2.LINE_AA,
     )
 
-
 def draw_player_foot(frame, det):
     x = int(round(det["x"]))
     y = int(round(det["y"]))
     cv2.circle(frame, (x, y), FOOT_RADIUS, PLAYER_FOOT_COLOR, -1)
 
-
 def draw_court_point(frame, det):
     x = int(round(det["x"]))
     y = int(round(det["y"]))
-    label = det["object_id"]
 
+    label = ""
     cv2.circle(frame, (x, y), COURT_RADIUS, COURT_COLOR, -1)
     cv2.putText(
         frame,
@@ -266,15 +238,16 @@ def draw_court_point(frame, det):
         cv2.LINE_AA,
     )
 
-
 def draw_ball(frame, det):
     x = int(round(det["x"]))
     y = int(round(det["y"]))
 
+    label = "ball"
+
     cv2.circle(frame, (x, y), BALL_RADIUS, BALL_COLOR, -1)
     cv2.putText(
         frame,
-        "ball",
+        label,
         (x + 8, y - 8),
         FONT,
         0.5,
@@ -282,11 +255,6 @@ def draw_ball(frame, det):
         1,
         cv2.LINE_AA,
     )
-
-
-# ============================================================
-# HOMOGRAPHY MINI-COURT HELPERS
-# ============================================================
 
 def clamp(value, min_value, max_value):
     return max(min_value, min(max_value, value))
@@ -305,8 +273,6 @@ def homography_panel_layout(frame_width, frame_height):
     panel_w = min(preferred_w, max_panel_w)
     panel_h = min(preferred_h, max_panel_h)
 
-    # Keep the panel tall enough for a tennis court. If the video is short,
-    # shrink width to preserve the aspect instead of dropping the panel.
     if panel_h < preferred_h:
         panel_w = max(120, int(panel_h / 1.75))
 
@@ -328,10 +294,8 @@ def point_in_view(court_x, court_y):
         and HOMOGRAPHY_VIEW_Y_MIN <= court_y <= HOMOGRAPHY_VIEW_Y_MAX
     )
 
-
 def point_on_court(court_x, court_y):
     return 0.0 <= court_x <= 1.0 and 0.0 <= court_y <= 1.0
-
 
 def mini_court_point(panel_x, panel_y, panel_w, panel_h, court_x, court_y, clamp_to_view=False):
     if clamp_to_view:
@@ -345,7 +309,6 @@ def mini_court_point(panel_x, panel_y, panel_w, panel_h, court_x, court_y, clamp
     y = panel_y + int(round(y_ratio * panel_h))
 
     return x, y
-
 
 def draw_panel_background(frame, x0, y0, panel_w, panel_h):
     cv2.rectangle(
@@ -375,15 +338,12 @@ def draw_panel_background(frame, x0, y0, panel_w, panel_h):
         cv2.LINE_AA,
     )
 
-
 def draw_homography_line(frame, x0, y0, panel_w, panel_h, start, end, color, thickness=1):
     p1 = mini_court_point(x0, y0, panel_w, panel_h, start[0], start[1])
     p2 = mini_court_point(x0, y0, panel_w, panel_h, end[0], end[1])
     cv2.line(frame, p1, p2, color, thickness)
 
-
 def draw_homography_court_lines(frame, x0, y0, panel_w, panel_h):
-    # Draw the normalized doubles court.
     court_lines = [
         ((0.0, 0.0), (1.0, 0.0)),
         ((1.0, 0.0), (1.0, 1.0)),
@@ -394,7 +354,6 @@ def draw_homography_court_lines(frame, x0, y0, panel_w, panel_h):
     for start, end in court_lines:
         draw_homography_line(frame, x0, y0, panel_w, panel_h, start, end, HOMOGRAPHY_LINE_COLOR, 1)
 
-    # Tennis court line ratios in the normalized doubles court plane.
     singles_left = 0.125
     singles_right = 0.875
     far_service_y = 0.231
@@ -413,8 +372,6 @@ def draw_homography_court_lines(frame, x0, y0, panel_w, panel_h):
     for start, end in line_points:
         draw_homography_line(frame, x0, y0, panel_w, panel_h, start, end, HOMOGRAPHY_LINE_COLOR, 1)
 
-    # Light guide lines outside the court. This makes it obvious that the panel
-    # has padding and that off-court points are not being forced onto the court.
     guide_lines = [
         ((HOMOGRAPHY_VIEW_X_MIN, 0.0), (HOMOGRAPHY_VIEW_X_MAX, 0.0)),
         ((HOMOGRAPHY_VIEW_X_MIN, 1.0), (HOMOGRAPHY_VIEW_X_MAX, 1.0)),
@@ -425,11 +382,9 @@ def draw_homography_court_lines(frame, x0, y0, panel_w, panel_h):
     for start, end in guide_lines:
         draw_homography_line(frame, x0, y0, panel_w, panel_h, start, end, HOMOGRAPHY_OUTSIDE_LINE_COLOR, 1)
 
-
 def draw_clipped_marker(frame, x, y, color):
     cv2.line(frame, (x - 5, y - 5), (x + 5, y + 5), color, 1)
     cv2.line(frame, (x - 5, y + 5), (x + 5, y - 5), color, 1)
-
 
 def draw_homography_player(frame, x0, y0, panel_w, panel_h, player):
     court_x = player["court_x"]
@@ -456,8 +411,6 @@ def draw_homography_player(frame, x0, y0, panel_w, panel_h, player):
         draw_clipped_marker(frame, px, py, color)
 
     label = player["player_id"].replace("_foot", "")
-    if outside_court:
-        label += " out"
 
     cv2.putText(
         frame,
@@ -469,7 +422,6 @@ def draw_homography_player(frame, x0, y0, panel_w, panel_h, player):
         1,
         cv2.LINE_AA,
     )
-
 
 def draw_homography_ball(frame, x0, y0, panel_w, panel_h, ball_h):
     court_x = ball_h["court_x"]
@@ -495,11 +447,9 @@ def draw_homography_ball(frame, x0, y0, panel_w, panel_h, ball_h):
     if clipped:
         draw_clipped_marker(frame, bx, by, color)
 
-    label = "ball out" if outside_court else "ball"
-
     cv2.putText(
         frame,
-        label,
+        "",
         (bx + 6, by - 4),
         FONT,
         0.4,
@@ -524,11 +474,6 @@ def draw_homography_court(frame, ball_h, players_h):
 
     if ball_h is not None:
         draw_homography_ball(frame, x0, y0, panel_w, panel_h, ball_h)
-
-
-# ============================================================
-# MAIN DRAW FUNCTION
-# ============================================================
 
 def draw(VIDEO_PATH):
     os.makedirs("outputs", exist_ok=True)
@@ -576,13 +521,11 @@ def draw(VIDEO_PATH):
 
         draw_header(frame, frame_id, timestamp)
 
-        # Court points in image space.
         for det in court_by_frame.get(frame_id, []):
             if det["object_type"] == "court_point":
                 if det["x"] is not None and det["y"] is not None:
                     draw_court_point(frame, det)
 
-        # Players in image space.
         for det in player_by_frame.get(frame_id, []):
             if det["object_type"] == "player":
                 if (
@@ -597,13 +540,11 @@ def draw(VIDEO_PATH):
                 if det["x"] is not None and det["y"] is not None:
                     draw_player_foot(frame, det)
 
-        # Ball in image space.
         current_ball = ball_by_frame.get(frame_id)
 
         if current_ball is not None:
             draw_ball(frame, current_ball)
 
-        # Homography top-down mini-court.
         draw_homography_court(
             frame=frame,
             ball_h=ball_homography_by_frame.get(frame_id),
