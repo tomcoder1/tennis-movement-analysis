@@ -71,6 +71,43 @@ PLAYABLE_REGION = np.array(
     dtype=np.float32,
 )
 
+
+# Normalized doubles-court template used only to reject false player detections.
+# x = 0 left doubles sideline, x = 1 right doubles sideline
+# y = 0 far baseline, y = 1 near baseline
+SINGLES_LEFT = 4.5 / 36.0
+SINGLES_RIGHT = 31.5 / 36.0
+FAR_SERVICE_Y = 18.0 / 78.0
+NET_Y = 39.0 / 78.0
+NEAR_SERVICE_Y = 60.0 / 78.0
+
+COURT_TEMPLATE_BY_ID = {
+    "court_0": (0.0, 0.0),
+    "court_1": (1.0, 0.0),
+    "court_2": (0.0, 1.0),
+    "court_3": (1.0, 1.0),
+    "court_4": (SINGLES_LEFT, 0.0),
+    "court_5": (SINGLES_LEFT, 1.0),
+    "court_6": (SINGLES_RIGHT, 0.0),
+    "court_7": (SINGLES_RIGHT, 1.0),
+    "court_8": (SINGLES_LEFT, FAR_SERVICE_Y),
+    "court_9": (SINGLES_RIGHT, FAR_SERVICE_Y),
+    "court_10": (SINGLES_LEFT, NEAR_SERVICE_Y),
+    "court_11": (SINGLES_RIGHT, NEAR_SERVICE_Y),
+    "court_12": (0.5, FAR_SERVICE_Y),
+    "court_13": (0.5, NEAR_SERVICE_Y),
+    "court_14": (0.5, NET_Y),
+}
+
+# Foot positions outside this normalized court area are treated as non-players.
+# This removes ball kids, line judges, and spectators while still allowing real
+# players to stand slightly behind the baselines or just outside the doubles lines.
+PLAYER_COURT_X_MIN = -0.10
+PLAYER_COURT_X_MAX = 1.10
+PLAYER_COURT_Y_MIN = -0.30
+PLAYER_COURT_Y_MAX = 1.30
+PLAYER_SIDE_SPLIT_Y = 0.50
+
 def load_pytorch_weights(model, weights_path, device):
     checkpoint = torch.load(weights_path, map_location=device)
 
@@ -187,9 +224,146 @@ def get_candidates(results, frame_width, frame_height):
 
     return candidates
 
+def build_player_filter_homography(court_points):
+    image_points = []
+    template_points = []
+
+    if not court_points:
+        return None
+
+    for point in court_points:
+        point_id = point.get("id", point.get("object_id", ""))
+
+        if point_id not in COURT_TEMPLATE_BY_ID:
+            continue
+
+        x = point.get("x")
+        y = point.get("y")
+
+        if x is None or y is None:
+            continue
+
+        if not np.isfinite(float(x)) or not np.isfinite(float(y)):
+            continue
+
+        image_points.append([float(x), float(y)])
+        template_points.append(COURT_TEMPLATE_BY_ID[point_id])
+
+    if len(image_points) < 4:
+        return None
+
+    image_arr = np.asarray(image_points, dtype=np.float32)
+    template_arr = np.asarray(template_points, dtype=np.float32)
+
+    if len(image_arr) == 4:
+        H = cv2.getPerspectiveTransform(image_arr, template_arr)
+    else:
+        H, _ = cv2.findHomography(image_arr, template_arr, cv2.RANSAC, 0.03)
+
+    if H is None:
+        return None
+
+    H = np.asarray(H, dtype=np.float64)
+
+    if H.shape != (3, 3):
+        return None
+
+    if not np.all(np.isfinite(H)):
+        return None
+
+    if abs(H[2, 2]) > 1e-12:
+        H = H / H[2, 2]
+
+    return H
+
+
+def project_point_to_court(H, point):
+    if H is None or point is None:
+        return None
+
+    pts = np.asarray([[point]], dtype=np.float32)
+    warped = cv2.perspectiveTransform(pts, H).reshape(-1, 2)
+
+    if warped.size == 0:
+        return None
+
+    court_x = float(warped[0, 0])
+    court_y = float(warped[0, 1])
+
+    if not np.isfinite(court_x) or not np.isfinite(court_y):
+        return None
+
+    return court_x, court_y
+
+
+def is_valid_player_court_point(court_point):
+    if court_point is None:
+        return False
+
+    court_x, court_y = court_point
+
+    return (
+        PLAYER_COURT_X_MIN <= court_x <= PLAYER_COURT_X_MAX
+        and PLAYER_COURT_Y_MIN <= court_y <= PLAYER_COURT_Y_MAX
+    )
+
+
+def attach_court_positions_to_candidates(candidates, H):
+    if H is None:
+        return candidates
+
+    filtered = []
+
+    for candidate in candidates:
+        court_foot = project_point_to_court(H, candidate.get("foot"))
+
+        if not is_valid_player_court_point(court_foot):
+            continue
+
+        item = candidate.copy()
+        item["court_foot"] = court_foot
+        filtered.append(item)
+
+    return filtered
+
+
 def select_two_players(candidates, frame_width, frame_height):
     selected = {}
 
+    court_candidates = [
+        candidate for candidate in candidates
+        if candidate.get("court_foot") is not None
+    ]
+
+    if court_candidates:
+        near_candidates = []
+        far_candidates = []
+
+        for candidate in court_candidates:
+            court_x, court_y = candidate["court_foot"]
+
+            if court_y >= PLAYER_SIDE_SPLIT_Y:
+                near_candidates.append(candidate)
+            else:
+                far_candidates.append(candidate)
+
+        if near_candidates:
+            near = max(
+                near_candidates,
+                key=lambda c: (c["court_foot"][1], c["confidence"]),
+            )
+            selected["player_1"] = near
+
+        if far_candidates:
+            far = min(
+                far_candidates,
+                key=lambda c: (c["court_foot"][1], -c["confidence"]),
+            )
+            selected["player_2"] = far
+
+        return selected
+
+    # Fallback if court homography is not available.
     near_candidates = []
     far_candidates = []
 
@@ -772,6 +946,37 @@ def predictor(VIDEO_PATH):
             if MAX_FRAMES is not None and frame_id >= MAX_FRAMES:
                 break
 
+            if frame_id % COURT_DETECTION_INTERVAL_FRAMES == 0 or last_court_points is None:
+                court_tensor = preprocess_court_frame(frame)
+
+                with torch.inference_mode():
+                    court_out = court_model(court_tensor)
+
+                court_points = extract_court_keypoints(
+                    court_out=court_out,
+                    original_w=original_w,
+                    original_h=original_h,
+                )
+
+                last_court_points = court_points
+            else:
+                court_points = last_court_points
+
+            for point in court_points:
+                court_writer.writerow([
+                    frame_id,
+                    timestamp,
+                    "court_model",
+                    "court_point",
+                    point["id"],
+                    point["x"],
+                    point["y"],
+                    "",
+                    "",
+                    point["confidence"],
+                    "",
+                ])
+
             player_results = player_model.track(
                 source=frame,
                 tracker=PLAYER_TRACKER,
@@ -787,6 +992,9 @@ def predictor(VIDEO_PATH):
                 frame_width=original_w,
                 frame_height=original_h,
             )
+
+            player_filter_H = build_player_filter_homography(court_points)
+            candidates = attach_court_positions_to_candidates(candidates, player_filter_H)
 
             selected_players = select_two_players(
                 candidates=candidates,
@@ -835,37 +1043,6 @@ def predictor(VIDEO_PATH):
             )
 
             ball_track.append((ball_x, ball_y))
-
-            if frame_id % COURT_DETECTION_INTERVAL_FRAMES == 0 or last_court_points is None:
-                court_tensor = preprocess_court_frame(frame)
-
-                with torch.inference_mode():
-                    court_out = court_model(court_tensor)
-
-                court_points = extract_court_keypoints(
-                    court_out=court_out,
-                    original_w=original_w,
-                    original_h=original_h,
-                )
-
-                last_court_points = court_points
-            else:
-                court_points = last_court_points
-
-            for point in court_points:
-                court_writer.writerow([
-                    frame_id,
-                    timestamp,
-                    "court_model",
-                    "court_point",
-                    point["id"],
-                    point["x"],
-                    point["y"],
-                    "",
-                    "",
-                    point["confidence"],
-                    "",
-                ])
 
             if frame_id % 100 == 0:
                 print(f"Processed frame {frame_id}")
