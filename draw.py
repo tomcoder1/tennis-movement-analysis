@@ -9,6 +9,8 @@ COURT_CSV = "outputs/court.csv"
 PLAYER_CSV = "outputs/player.csv"
 BALL_HOMOGRAPHY_CSV = "outputs/ball_homography.csv"
 PLAYER_HOMOGRAPHY_CSV = "outputs/player_homography.csv"
+BALL_EVENTS_CSV = "outputs/ball_events.csv"
+TENNIS_EVENTS_CSV = "outputs/tennis_events.csv"
 
 OUTPUT_VIDEO_PATH = "outputs/out.mp4"
 
@@ -24,6 +26,8 @@ HOMOGRAPHY_OUTSIDE_LINE_COLOR = (120, 120, 120)
 HOMOGRAPHY_BALL_COLOR = (0, 255, 255)
 HOMOGRAPHY_PLAYER_COLOR = (255, 0, 255)
 HOMOGRAPHY_CLIPPED_COLOR = (0, 120, 255)
+EVENT_COLOR = (0, 165, 255)
+SUMMARY_COLOR = (255, 220, 120)
 
 BALL_RADIUS = 6
 COURT_RADIUS = 5
@@ -180,6 +184,24 @@ def load_player_homography_by_frame(csv_path):
 
     return players_by_frame
 
+
+def load_events_by_frame(csv_path):
+    """Load either event CSV; missing optional event files are harmless."""
+    events_by_frame = defaultdict(list)
+    if not os.path.exists(csv_path):
+        return events_by_frame
+
+    with open(csv_path, "r", newline="") as f:
+        for row in csv.DictReader(f):
+            frame_id = parse_int(row.get("frame_id"))
+            row["frame_id"] = frame_id
+            for key in ("img_x", "img_y", "court_x", "court_y",
+                        "target_court_x", "target_court_y", "confidence"):
+                if key in row:
+                    row[key] = parse_float(row.get(key))
+            events_by_frame[frame_id].append(row)
+    return events_by_frame
+
 def draw_header(frame, frame_id, timestamp):
     cv2.putText(
         frame,
@@ -255,6 +277,46 @@ def draw_ball(frame, det):
         1,
         cv2.LINE_AA,
     )
+
+
+def draw_event_labels(frame, ball_events, tennis_events, summary_events):
+    """Render current raw labels plus a short-lived interpreted summary."""
+    height, width = frame.shape[:2]
+    y = 62
+    for event in ball_events:
+        player = event.get("player_id", "")
+        label = event.get("event_type", "event").replace("_", " ").upper()
+        if player:
+            label += f" - {player}"
+        confidence = event.get("confidence")
+        if confidence is not None:
+            label += f" ({confidence:.2f})"
+        cv2.putText(frame, label, (20, y), FONT, 0.72, EVENT_COLOR, 2, cv2.LINE_AA)
+        y += 29
+
+        img_x, img_y = event.get("img_x"), event.get("img_y")
+        if img_x is not None and img_y is not None:
+            point = (int(round(img_x)), int(round(img_y)))
+            cv2.circle(frame, point, 13, EVENT_COLOR, 2)
+            cv2.putText(frame, event.get("event_type", ""),
+                        (point[0] + 15, max(22, point[1] - 10)),
+                        FONT, 0.55, EVENT_COLOR, 2, cv2.LINE_AA)
+
+    # Interpreted labels are shown on their exact frame. The latest description
+    # also remains briefly so a human can comfortably read the point summary.
+    descriptions = [event.get("description", "") for event in tennis_events if event.get("description")]
+    if not descriptions and summary_events:
+        descriptions = [summary_events[-1].get("description", "")]
+    for description in descriptions[-2:]:
+        if not description:
+            continue
+        text_width = cv2.getTextSize(description, FONT, 0.62, 2)[0][0]
+        x = max(20, (width - text_width) // 2)
+        cv2.rectangle(frame, (x - 10, height - 57),
+                      (min(width - 10, x + text_width + 10), height - 20),
+                      (30, 30, 30), -1)
+        cv2.putText(frame, description, (x, height - 31), FONT, 0.62,
+                    SUMMARY_COLOR, 2, cv2.LINE_AA)
 
 def clamp(value, min_value, max_value):
     return max(min_value, min(max_value, value))
@@ -459,7 +521,7 @@ def draw_homography_ball(frame, x0, y0, panel_w, panel_h, ball_h):
     )
 
 
-def draw_homography_court(frame, ball_h, players_h):
+def draw_homography_court(frame, ball_h, players_h, ball_events=None, tennis_events=None):
     height, width = frame.shape[:2]
     x0, y0, panel_w, panel_h = homography_panel_layout(width, height)
 
@@ -475,6 +537,21 @@ def draw_homography_court(frame, ball_h, players_h):
     if ball_h is not None:
         draw_homography_ball(frame, x0, y0, panel_w, panel_h, ball_h)
 
+    # Current event and its interpreted target are highlighted on the mini-court.
+    for event in ball_events or []:
+        court_x, court_y = event.get("court_x"), event.get("court_y")
+        if court_x is None or court_y is None:
+            continue
+        ex, ey = mini_court_point(x0, y0, panel_w, panel_h, court_x, court_y, True)
+        cv2.circle(frame, (ex, ey), 10, EVENT_COLOR, 2)
+
+    for event in tennis_events or []:
+        target_x, target_y = event.get("target_court_x"), event.get("target_court_y")
+        if target_x is None or target_y is None:
+            continue
+        tx, ty = mini_court_point(x0, y0, panel_w, panel_h, target_x, target_y, True)
+        cv2.drawMarker(frame, (tx, ty), SUMMARY_COLOR, cv2.MARKER_CROSS, 14, 2)
+
 def draw(VIDEO_PATH):
     os.makedirs("outputs", exist_ok=True)
 
@@ -483,6 +560,8 @@ def draw(VIDEO_PATH):
     player_by_frame = load_csv_by_frame(PLAYER_CSV)
     ball_homography_by_frame = load_ball_homography_by_frame(BALL_HOMOGRAPHY_CSV)
     player_homography_by_frame = load_player_homography_by_frame(PLAYER_HOMOGRAPHY_CSV)
+    ball_events_by_frame = load_events_by_frame(BALL_EVENTS_CSV)
+    tennis_events_by_frame = load_events_by_frame(TENNIS_EVENTS_CSV)
 
     cap = cv2.VideoCapture(VIDEO_PATH)
 
@@ -510,6 +589,7 @@ def draw(VIDEO_PATH):
         raise RuntimeError(f"Could not create output video: {OUTPUT_VIDEO_PATH}")
 
     frame_id = 0
+    recent_summary_events = []
 
     while True:
         ok, frame = cap.read()
@@ -545,11 +625,28 @@ def draw(VIDEO_PATH):
         if current_ball is not None:
             draw_ball(frame, current_ball)
 
+        current_ball_events = ball_events_by_frame.get(frame_id, [])
+        current_tennis_events = tennis_events_by_frame.get(frame_id, [])
+        summary_candidates = [
+            event for event in current_tennis_events
+            if event.get("event_type") in ("serve", "return", "rally_hit", "bounce_in",
+                                            "bounce_out", "out", "miss", "failed_return", "point_won")
+        ]
+        if summary_candidates:
+            recent_summary_events = summary_candidates
+
         draw_homography_court(
             frame=frame,
             ball_h=ball_homography_by_frame.get(frame_id),
             players_h=player_homography_by_frame.get(frame_id, []),
+            ball_events=current_ball_events,
+            tennis_events=current_tennis_events,
         )
+
+        # Keep summaries for 1.5 seconds, but raw labels only on the event frame.
+        recent_frame = recent_summary_events[-1]["frame_id"] if recent_summary_events else -10_000
+        visible_summary = recent_summary_events if frame_id - recent_frame <= int(1.5 * fps) else []
+        draw_event_labels(frame, current_ball_events, current_tennis_events, visible_summary)
 
         writer.write(frame)
 

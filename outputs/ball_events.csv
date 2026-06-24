@@ -1,0 +1,28 @@
+frame_id,timestamp,event_type,player_id,img_x,img_y,court_x,court_y,confidence,reason
+86,2.866667,serve_toss,player_1,1160.000,577.000,0.703084,0.672851,0.804,ball launched upward beside player
+110,3.666667,hit,player_1,1084.000,470.000,0.640468,0.461176,0.781,trajectory changed near player box
+133,4.433333,hit,player_2,805.000,235.000,0.245324,-0.271683,0.731,trajectory changed near player box
+157,5.233333,hit,player_1,853.000,641.000,0.403896,0.780947,0.862,trajectory changed near player box
+191,6.366667,bounce,,1195.000,355.000,0.804927,0.163465,0.625,vertical trajectory reversed at court level
+226,7.533333,hit,player_2,1154.000,279.000,0.777868,-0.092221,0.724,trajectory changed near player box
+260,8.666667,serve_toss,player_1,816.000,655.000,0.372673,0.800762,0.882,ball launched upward beside player
+283,9.433333,hit,player_2,770.000,298.000,0.224147,-0.022850,0.738,trajectory changed near player box
+308,10.266667,hit,player_1,812.000,463.000,0.331516,0.447227,0.777,trajectory changed near player box
+328,10.933333,serve_toss,player_1,868.000,483.000,0.398686,0.491575,0.829,ball launched upward beside player
+338,11.266667,hit,player_1,880.000,407.000,0.400468,0.309377,0.714,trajectory changed near player box
+368,12.266667,bounce,,1148.000,392.000,0.734086,0.266310,0.610,vertical trajectory reversed at court level
+376,12.533333,hit,player_2,1210.000,269.000,0.865079,-0.125903,0.750,trajectory changed near player box
+402,13.400000,hit,player_2,1174.000,157.000,0.875914,-0.646878,0.720,trajectory changed near player box
+429,14.300000,bounce,,805.000,703.000,0.376277,0.857811,0.770,vertical trajectory reversed at court level
+439,14.633333,hit,player_1,696.000,649.000,0.265430,0.781403,0.716,trajectory changed near player box
+501,16.700000,hit,player_1,1162.000,566.000,0.711982,0.644443,0.855,trajectory changed near player box
+519,17.300000,serve_toss,player_1,1441.000,655.000,0.942597,0.789381,0.778,ball launched upward beside player
+586,19.533333,hit,player_1,884.000,705.000,0.443464,0.866094,0.795,trajectory changed near player box
+609,20.300000,miss,player_2,899.000,800.000,0.459920,0.977721,0.420,ball track ended without an opponent contact
+646,21.533333,serve_toss,player_1,910.000,679.000,0.464231,0.820909,0.884,ball launched upward beside player
+654,21.800000,hit,player_1,899.000,513.000,0.444992,0.542318,0.732,trajectory changed near player box
+679,22.633333,hit,player_1,907.000,452.000,0.445727,0.412441,0.871,trajectory changed near player box
+698,23.266667,serve_toss,player_2,1185.000,298.000,0.822373,-0.027425,0.873,ball launched upward beside player
+749,24.966667,hit,player_1,743.000,583.000,0.299421,0.666706,0.854,trajectory changed near player box
+788,26.266667,hit,player_2,1127.000,333.000,0.726845,0.092095,0.698,trajectory changed near player box
+828,27.600000,hit,player_1,1287.000,812.000,0.765323,0.983421,0.873,trajectory changed near player box
