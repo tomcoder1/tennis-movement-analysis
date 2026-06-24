@@ -5,11 +5,15 @@ import numpy as np
 import torch
 
 from scipy.spatial import distance
-from ultralytics import YOLO
+try:
+    from ultralytics import YOLO
+except ImportError:  # Allows CSV-only stages to run without model dependencies.
+    YOLO = None
 
 
 from model import BallTracker, CourtTracker
 from read_video import read_video
+from pipeline_utils import ensure_output_dirs, organized_path, require_files, validate_video
 
 # ============================================================
 # CONFIG
@@ -18,10 +22,6 @@ from read_video import read_video
 BALL_WEIGHTS = "model/model_best.pt"
 COURT_WEIGHTS = "model/Court_detect_model.pth"
 PLAYER_WEIGHTS = "model/player_detector_best.pt"
-
-BALL_CSV = "outputs/ball.csv"
-COURT_CSV = "outputs/court.csv"
-PLAYER_CSV = "outputs/player.csv"
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -900,8 +900,14 @@ def save_ball_csv(ball_track, path_output_csv, fps):
                 "",
             ])
 
-def predictor(VIDEO_PATH):
-    os.makedirs("outputs", exist_ok=True)
+def predictor(VIDEO_PATH="test.mp4", output_dir="outputs", max_frames=None):
+    """Run model inference while keeping the original callable API compatible."""
+    validate_video(VIDEO_PATH)
+    require_files([BALL_WEIGHTS, COURT_WEIGHTS, PLAYER_WEIGHTS], "model weights")
+    ensure_output_dirs(output_dir)
+    ball_csv = organized_path(output_dir, "ball")
+    court_csv = organized_path(output_dir, "court")
+    player_csv = organized_path(output_dir, "player")
 
     print("Device:", DEVICE)
 
@@ -926,8 +932,8 @@ def predictor(VIDEO_PATH):
     last_court_points = None
     fps = None
 
-    with open(COURT_CSV, "w", newline="") as court_file, \
-         open(PLAYER_CSV, "w", newline="") as player_file:
+    with open(court_csv, "w", newline="") as court_file, \
+         open(player_csv, "w", newline="") as player_file:
 
         court_writer = csv.writer(court_file)
         player_writer = csv.writer(player_file)
@@ -943,7 +949,8 @@ def predictor(VIDEO_PATH):
 
             original_h, original_w = frame.shape[:2]
 
-            if MAX_FRAMES is not None and frame_id >= MAX_FRAMES:
+            frame_limit = max_frames if max_frames is not None else MAX_FRAMES
+            if frame_limit is not None and frame_id >= frame_limit:
                 break
 
             if frame_id % COURT_DETECTION_INTERVAL_FRAMES == 0 or last_court_points is None:
@@ -1061,12 +1068,12 @@ def predictor(VIDEO_PATH):
 
     save_ball_csv(
         ball_track=ball_track,
-        path_output_csv=BALL_CSV,
+        path_output_csv=ball_csv,
         fps=fps,
     )
 
     print("Prediction done.")
     print(f"Ball detections: raw={raw_count}, cleaned={cleaned_count}, final={final_count}")
-    print(f"Saved ball CSV: {BALL_CSV}")
-    print(f"Saved court CSV: {COURT_CSV}")
-    print(f"Saved player CSV: {PLAYER_CSV}")
+    print(f"Saved ball CSV: {ball_csv}")
+    print(f"Saved court CSV: {court_csv}")
+    print(f"Saved player CSV: {player_csv}")

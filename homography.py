@@ -7,19 +7,15 @@ from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
+from pipeline_utils import (
+    DETECTION_COLUMNS, ensure_output_dirs, organized_path, parse_number,
+    resolve_input_path, validate_csv,
+)
 
 
 # ============================================================
 # CONFIG
 # ============================================================
-
-COURT_CSV = "outputs/court.csv"
-BALL_CSV = "outputs/ball.csv"
-PLAYER_CSV = "outputs/player.csv"
-
-HOMOGRAPHY_CSV = "outputs/homography.csv"
-BALL_HOMOGRAPHY_CSV = "outputs/ball_homography.csv"
-PLAYER_HOMOGRAPHY_CSV = "outputs/player_homography.csv"
 
 # Normalized doubles-court plane:
 # x = 0.0 left doubles sideline, x = 1.0 right doubles sideline
@@ -99,15 +95,14 @@ class HomographyResult:
 # ============================================================
 
 def parse_float(value):
-    if value is None or value == "":
-        return None
-    return float(value)
+    return parse_number(value)
 
 
 def parse_int(value, default=0):
-    if value is None or value == "":
+    number = parse_number(value)
+    if number is None:
         return default
-    return int(value)
+    return int(number)
 
 
 def load_csv_by_frame(csv_path):
@@ -518,10 +513,10 @@ def build_homographies_by_frame(court_by_frame, all_frame_ids):
 # SAVE OUTPUTS
 # ============================================================
 
-def write_homography_csv(homography_by_frame):
-    os.makedirs(os.path.dirname(HOMOGRAPHY_CSV), exist_ok=True)
+def write_homography_csv(homography_by_frame, output_csv):
+    os.makedirs(os.path.dirname(output_csv) or ".", exist_ok=True)
 
-    with open(HOMOGRAPHY_CSV, "w", newline="") as f:
+    with open(output_csv, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([
             "frame_id",
@@ -561,10 +556,10 @@ def write_homography_csv(homography_by_frame):
             ])
 
 
-def write_ball_homography_csv(ball_by_frame, homography_by_frame):
-    os.makedirs(os.path.dirname(BALL_HOMOGRAPHY_CSV), exist_ok=True)
+def write_ball_homography_csv(ball_by_frame, homography_by_frame, output_csv):
+    os.makedirs(os.path.dirname(output_csv) or ".", exist_ok=True)
 
-    with open(BALL_HOMOGRAPHY_CSV, "w", newline="") as f:
+    with open(output_csv, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([
             "frame_id",
@@ -600,10 +595,10 @@ def write_ball_homography_csv(ball_by_frame, homography_by_frame):
                 ])
 
 
-def write_player_homography_csv(player_by_frame, homography_by_frame):
-    os.makedirs(os.path.dirname(PLAYER_HOMOGRAPHY_CSV), exist_ok=True)
+def write_player_homography_csv(player_by_frame, homography_by_frame, output_csv):
+    os.makedirs(os.path.dirname(output_csv) or ".", exist_ok=True)
 
-    with open(PLAYER_HOMOGRAPHY_CSV, "w", newline="") as f:
+    with open(output_csv, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([
             "frame_id",
@@ -647,10 +642,16 @@ def write_player_homography_csv(player_by_frame, homography_by_frame):
 # MAIN ENTRYPOINT
 # ============================================================
 
-def run_homography():
-    court_by_frame = load_csv_by_frame(COURT_CSV)
-    ball_by_frame = load_csv_by_frame(BALL_CSV)
-    player_by_frame = load_csv_by_frame(PLAYER_CSV)
+def run_homography(output_dir="outputs"):
+    ensure_output_dirs(output_dir)
+    court_csv = resolve_input_path(output_dir, "court")
+    ball_csv = resolve_input_path(output_dir, "ball")
+    player_csv = resolve_input_path(output_dir, "player")
+    for path in (court_csv, ball_csv, player_csv):
+        validate_csv(path, DETECTION_COLUMNS, "predictor")
+    court_by_frame = load_csv_by_frame(court_csv)
+    ball_by_frame = load_csv_by_frame(ball_csv)
+    player_by_frame = load_csv_by_frame(player_csv)
 
     all_frame_ids = sorted(
         set(court_by_frame.keys())
@@ -663,9 +664,12 @@ def run_homography():
         all_frame_ids=all_frame_ids,
     )
 
-    write_homography_csv(homography_by_frame)
-    write_ball_homography_csv(ball_by_frame, homography_by_frame)
-    write_player_homography_csv(player_by_frame, homography_by_frame)
+    homography_csv = organized_path(output_dir, "homography")
+    ball_h_csv = organized_path(output_dir, "ball_homography")
+    player_h_csv = organized_path(output_dir, "player_homography")
+    write_homography_csv(homography_by_frame, homography_csv)
+    write_ball_homography_csv(ball_by_frame, homography_by_frame, ball_h_csv)
+    write_player_homography_csv(player_by_frame, homography_by_frame, player_h_csv)
 
     valid_count = sum(
         1 for result in homography_by_frame.values()
@@ -674,6 +678,6 @@ def run_homography():
 
     print("Homography done.")
     print(f"Valid homography frames: {valid_count}/{len(all_frame_ids)}")
-    print(f"Saved homography CSV: {HOMOGRAPHY_CSV}")
-    print(f"Saved ball homography CSV: {BALL_HOMOGRAPHY_CSV}")
-    print(f"Saved player homography CSV: {PLAYER_HOMOGRAPHY_CSV}")
+    print(f"Saved homography CSV: {homography_csv}")
+    print(f"Saved ball homography CSV: {ball_h_csv}")
+    print(f"Saved player homography CSV: {player_h_csv}")

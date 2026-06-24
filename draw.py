@@ -3,16 +3,10 @@ import csv
 import math
 import cv2
 from collections import defaultdict
-
-BALL_CSV = "outputs/ball.csv"
-COURT_CSV = "outputs/court.csv"
-PLAYER_CSV = "outputs/player.csv"
-BALL_HOMOGRAPHY_CSV = "outputs/ball_homography.csv"
-PLAYER_HOMOGRAPHY_CSV = "outputs/player_homography.csv"
-BALL_EVENTS_CSV = "outputs/ball_events.csv"
-TENNIS_EVENTS_CSV = "outputs/tennis_events.csv"
-
-OUTPUT_VIDEO_PATH = "outputs/out.mp4"
+from pipeline_utils import (
+    DETECTION_COLUMNS, ensure_output_dirs, organized_path, resolve_input_path,
+    validate_csv, validate_video,
+)
 
 BALL_COLOR = (0, 255, 255)
 PLAYER_COLOR = (0, 255, 0)
@@ -26,7 +20,6 @@ HOMOGRAPHY_OUTSIDE_LINE_COLOR = (120, 120, 120)
 HOMOGRAPHY_BALL_COLOR = (0, 255, 255)
 HOMOGRAPHY_PLAYER_COLOR = (255, 0, 255)
 HOMOGRAPHY_CLIPPED_COLOR = (0, 120, 255)
-EVENT_COLOR = (0, 165, 255)
 SUMMARY_COLOR = (255, 220, 120)
 
 BALL_RADIUS = 6
@@ -185,22 +178,24 @@ def load_player_homography_by_frame(csv_path):
     return players_by_frame
 
 
-def load_events_by_frame(csv_path):
-    """Load either event CSV; missing optional event files are harmless."""
-    events_by_frame = defaultdict(list)
+def load_scheduled_lines(csv_path, fps):
+    """Load only narration lines selected by the speech scheduler."""
+    lines_by_frame = defaultdict(list)
     if not os.path.exists(csv_path):
-        return events_by_frame
+        return lines_by_frame
 
     with open(csv_path, "r", newline="") as f:
         for row in csv.DictReader(f):
-            frame_id = parse_int(row.get("frame_id"))
-            row["frame_id"] = frame_id
-            for key in ("img_x", "img_y", "court_x", "court_y",
-                        "target_court_x", "target_court_y", "confidence"):
-                if key in row:
-                    row[key] = parse_float(row.get(key))
-            events_by_frame[frame_id].append(row)
-    return events_by_frame
+            if str(row.get("was_skipped", "")).lower() == "true":
+                continue
+            start = parse_float(row.get("start_timestamp"))
+            end = parse_float(row.get("end_timestamp"))
+            text = row.get("spoken_text", "").strip()
+            if start is None or not text:
+                continue
+            frame_id = int(round(start * fps))
+            lines_by_frame[frame_id].append({"text": text, "end_timestamp": end or start + 1.5})
+    return lines_by_frame
 
 def draw_header(frame, frame_id, timestamp):
     cv2.putText(
@@ -279,43 +274,20 @@ def draw_ball(frame, det):
     )
 
 
-def draw_event_labels(frame, ball_events, tennis_events, summary_events):
-    """Render current raw labels plus a short-lived interpreted summary."""
+def draw_narration(frame, narration_lines):
+    """Render the same short text selected for speech."""
     height, width = frame.shape[:2]
-    y = 62
-    for event in ball_events:
-        player = event.get("player_id", "")
-        label = event.get("event_type", "event").replace("_", " ").upper()
-        if player:
-            label += f" - {player}"
-        confidence = event.get("confidence")
-        if confidence is not None:
-            label += f" ({confidence:.2f})"
-        cv2.putText(frame, label, (20, y), FONT, 0.72, EVENT_COLOR, 2, cv2.LINE_AA)
-        y += 29
-
-        img_x, img_y = event.get("img_x"), event.get("img_y")
-        if img_x is not None and img_y is not None:
-            point = (int(round(img_x)), int(round(img_y)))
-            cv2.circle(frame, point, 13, EVENT_COLOR, 2)
-            cv2.putText(frame, event.get("event_type", ""),
-                        (point[0] + 15, max(22, point[1] - 10)),
-                        FONT, 0.55, EVENT_COLOR, 2, cv2.LINE_AA)
-
-    # Interpreted labels are shown on their exact frame. The latest description
-    # also remains briefly so a human can comfortably read the point summary.
-    descriptions = [event.get("description", "") for event in tennis_events if event.get("description")]
-    if not descriptions and summary_events:
-        descriptions = [summary_events[-1].get("description", "")]
-    for description in descriptions[-2:]:
+    for index, line in enumerate(narration_lines[-2:]):
+        description = line.get("text", "")
         if not description:
             continue
         text_width = cv2.getTextSize(description, FONT, 0.62, 2)[0][0]
         x = max(20, (width - text_width) // 2)
-        cv2.rectangle(frame, (x - 10, height - 57),
-                      (min(width - 10, x + text_width + 10), height - 20),
+        baseline = height - 31 - (len(narration_lines[-2:]) - index - 1) * 39
+        cv2.rectangle(frame, (x - 10, baseline - 26),
+                      (min(width - 10, x + text_width + 10), baseline + 11),
                       (30, 30, 30), -1)
-        cv2.putText(frame, description, (x, height - 31), FONT, 0.62,
+        cv2.putText(frame, description, (x, baseline), FONT, 0.62,
                     SUMMARY_COLOR, 2, cv2.LINE_AA)
 
 def clamp(value, min_value, max_value):
@@ -521,7 +493,7 @@ def draw_homography_ball(frame, x0, y0, panel_w, panel_h, ball_h):
     )
 
 
-def draw_homography_court(frame, ball_h, players_h, ball_events=None, tennis_events=None):
+def draw_homography_court(frame, ball_h, players_h):
     height, width = frame.shape[:2]
     x0, y0, panel_w, panel_h = homography_panel_layout(width, height)
 
@@ -537,31 +509,21 @@ def draw_homography_court(frame, ball_h, players_h, ball_events=None, tennis_eve
     if ball_h is not None:
         draw_homography_ball(frame, x0, y0, panel_w, panel_h, ball_h)
 
-    # Current event and its interpreted target are highlighted on the mini-court.
-    for event in ball_events or []:
-        court_x, court_y = event.get("court_x"), event.get("court_y")
-        if court_x is None or court_y is None:
-            continue
-        ex, ey = mini_court_point(x0, y0, panel_w, panel_h, court_x, court_y, True)
-        cv2.circle(frame, (ex, ey), 10, EVENT_COLOR, 2)
+def draw(VIDEO_PATH="test.mp4", output_dir="outputs", max_frames=None):
+    validate_video(VIDEO_PATH)
+    ensure_output_dirs(output_dir)
+    ball_csv = resolve_input_path(output_dir, "ball")
+    court_csv = resolve_input_path(output_dir, "court")
+    player_csv = resolve_input_path(output_dir, "player")
+    for path in (ball_csv, court_csv, player_csv):
+        validate_csv(path, DETECTION_COLUMNS, "predictor")
 
-    for event in tennis_events or []:
-        target_x, target_y = event.get("target_court_x"), event.get("target_court_y")
-        if target_x is None or target_y is None:
-            continue
-        tx, ty = mini_court_point(x0, y0, panel_w, panel_h, target_x, target_y, True)
-        cv2.drawMarker(frame, (tx, ty), SUMMARY_COLOR, cv2.MARKER_CROSS, 14, 2)
-
-def draw(VIDEO_PATH):
-    os.makedirs("outputs", exist_ok=True)
-
-    ball_by_frame = load_ball_by_frame(BALL_CSV)
-    court_by_frame = load_csv_by_frame(COURT_CSV)
-    player_by_frame = load_csv_by_frame(PLAYER_CSV)
-    ball_homography_by_frame = load_ball_homography_by_frame(BALL_HOMOGRAPHY_CSV)
-    player_homography_by_frame = load_player_homography_by_frame(PLAYER_HOMOGRAPHY_CSV)
-    ball_events_by_frame = load_events_by_frame(BALL_EVENTS_CSV)
-    tennis_events_by_frame = load_events_by_frame(TENNIS_EVENTS_CSV)
+    ball_by_frame = load_ball_by_frame(ball_csv)
+    court_by_frame = load_csv_by_frame(court_csv)
+    player_by_frame = load_csv_by_frame(player_csv)
+    ball_homography_by_frame = load_ball_homography_by_frame(resolve_input_path(output_dir, "ball_homography"))
+    player_homography_by_frame = load_player_homography_by_frame(resolve_input_path(output_dir, "player_homography"))
+    output_video_path = organized_path(output_dir, "out_video")
 
     cap = cv2.VideoCapture(VIDEO_PATH)
 
@@ -577,8 +539,10 @@ def draw(VIDEO_PATH):
         cap.release()
         raise RuntimeError("Could not read FPS from video.")
 
+    narration_by_frame = load_scheduled_lines(organized_path(output_dir, "scheduled_lines"), fps)
+
     writer = cv2.VideoWriter(
-        OUTPUT_VIDEO_PATH,
+        output_video_path,
         cv2.VideoWriter_fourcc(*"mp4v"),
         fps,
         (width, height),
@@ -586,12 +550,14 @@ def draw(VIDEO_PATH):
 
     if not writer.isOpened():
         cap.release()
-        raise RuntimeError(f"Could not create output video: {OUTPUT_VIDEO_PATH}")
+        raise RuntimeError(f"Could not create output video: {output_video_path}")
 
     frame_id = 0
-    recent_summary_events = []
+    recent_narration = []
 
     while True:
+        if max_frames is not None and frame_id >= max_frames:
+            break
         ok, frame = cap.read()
 
         if not ok:
@@ -625,28 +591,20 @@ def draw(VIDEO_PATH):
         if current_ball is not None:
             draw_ball(frame, current_ball)
 
-        current_ball_events = ball_events_by_frame.get(frame_id, [])
-        current_tennis_events = tennis_events_by_frame.get(frame_id, [])
-        summary_candidates = [
-            event for event in current_tennis_events
-            if event.get("event_type") in ("serve", "return", "rally_hit", "bounce_in",
-                                            "bounce_out", "out", "miss", "failed_return", "point_won")
-        ]
-        if summary_candidates:
-            recent_summary_events = summary_candidates
+        current_narration = narration_by_frame.get(frame_id, [])
+        if current_narration:
+            recent_narration = current_narration
 
         draw_homography_court(
             frame=frame,
             ball_h=ball_homography_by_frame.get(frame_id),
             players_h=player_homography_by_frame.get(frame_id, []),
-            ball_events=current_ball_events,
-            tennis_events=current_tennis_events,
         )
 
-        # Keep summaries for 1.5 seconds, but raw labels only on the event frame.
-        recent_frame = recent_summary_events[-1]["frame_id"] if recent_summary_events else -10_000
-        visible_summary = recent_summary_events if frame_id - recent_frame <= int(1.5 * fps) else []
-        draw_event_labels(frame, current_ball_events, current_tennis_events, visible_summary)
+        visible_narration = recent_narration
+        if recent_narration and timestamp > max(line["end_timestamp"] for line in recent_narration) + 0.4:
+            visible_narration = []
+        draw_narration(frame, visible_narration)
 
         writer.write(frame)
 
@@ -658,4 +616,4 @@ def draw(VIDEO_PATH):
     cap.release()
     writer.release()
 
-    print(f"Saved overlay video to: {OUTPUT_VIDEO_PATH}")
+    print(f"Saved overlay video to: {output_video_path}")
