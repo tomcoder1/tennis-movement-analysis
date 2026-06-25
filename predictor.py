@@ -10,14 +10,9 @@ try:
 except ImportError:  # Allows CSV-only stages to run without model dependencies.
     YOLO = None
 
-
 from model import BallTracker, CourtTracker
 from read_video import read_video
 from pipeline_utils import ensure_output_dirs, organized_path, require_files, validate_video
-
-# ============================================================
-# CONFIG
-# ============================================================
 
 BALL_WEIGHTS = "model/model_best.pt"
 COURT_WEIGHTS = "model/Court_detect_model.pth"
@@ -28,7 +23,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 INPUT_H = 360
 INPUT_W = 640
 
-COURT_DETECTION_INTERVAL_FRAMES = 30
+COURT_DETECTION_INTERVAL_FRAMES = 10
 
 MAX_FRAMES = None
 
@@ -37,9 +32,6 @@ PLAYER_IOU = 0.50
 PLAYER_IMG_SIZE = 640
 PLAYER_TRACKER = "bytetrack.yaml"
 
-# Ball tracking. The tracker deliberately does not use player boxes to
-# remove or keep ball candidates. Hidden-ball frames should stay blank unless
-# TrackNet produces a candidate that is consistent with the recent ball motion.
 BALL_HEATMAP_THRESHOLD = 127
 BALL_MIN_COMPONENT_AREA = 1
 BALL_MAX_COMPONENT_AREA = 250
@@ -71,10 +63,6 @@ PLAYABLE_REGION = np.array(
     dtype=np.float32,
 )
 
-
-# Normalized doubles-court template used only to reject false player detections.
-# x = 0 left doubles sideline, x = 1 right doubles sideline
-# y = 0 far baseline, y = 1 near baseline
 SINGLES_LEFT = 4.5 / 36.0
 SINGLES_RIGHT = 31.5 / 36.0
 FAR_SERVICE_Y = 18.0 / 78.0
@@ -99,9 +87,6 @@ COURT_TEMPLATE_BY_ID = {
     "court_14": (0.5, NET_Y),
 }
 
-# Foot positions outside this normalized court area are treated as non-players.
-# This removes ball kids, line judges, and spectators while still allowing real
-# players to stand slightly behind the baselines or just outside the doubles lines.
 PLAYER_COURT_X_MIN = -0.10
 PLAYER_COURT_X_MAX = 1.10
 PLAYER_COURT_Y_MIN = -0.30
