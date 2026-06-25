@@ -4,6 +4,16 @@ from dataclasses import dataclass
 EPISODE_SECONDS = 1.0
 MIN_IMPULSE = 8.0
 MAX_PROXIMITY = 1.15
+RECOVERED_MIN_GAP_FRAMES = 3
+RECOVERED_MAX_GAP_FRAMES = 14
+RECOVERED_DUPLICATE_FRAMES = 12
+RECOVERED_MAX_PROXIMITY = 1.05
+RECOVERED_MIN_APPROACH_SPEED = 6.0
+SOFT_VECTOR_INNER_FRAMES = 3
+SOFT_VECTOR_OUTER_FRAMES = 10
+SOFT_MAX_PROXIMITY = 1.25
+SOFT_MIN_IMPULSE = 6.0
+SOFT_MIN_ANGLE_CHANGE = 0.30
 
 @dataclass(frozen=True)
 class ContactEpisode:
@@ -19,6 +29,7 @@ class ContactEpisode:
     end_frame: int = 0
     raw_count: int = 1
     precheck_reason: str = ""
+    debug_reason: str = ""
 
 def _velocity(ball_by_frame, frame, first, second):
     a, b = ball_by_frame.get(frame + first), ball_by_frame.get(frame + second)
@@ -82,8 +93,181 @@ def _episode_choice(group):
         best.frame, best.timestamp, best.player_id, best.confidence, best.impulse,
         best.proximity, best.speed_before, best.speed_after,
         min(item.frame for item in group), max(item.frame for item in group), len(group),
-        best.precheck_reason,
+        best.precheck_reason, best.debug_reason,
     )
+
+def _player_center(player):
+    return player.x + 0.5 * player.w, player.y + 0.5 * player.h
+
+def _point_to_segment_distance(px, py, ax, ay, bx, by):
+    dx, dy = bx - ax, by - ay
+    denom = dx * dx + dy * dy
+    if denom <= 1e-6:
+        return math.hypot(px - ax, py - ay)
+    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / denom))
+    return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+
+def _approaching_player(ball_before, velocity, player):
+    cx, cy = _player_center(player)
+    to_player = (cx - ball_before.x, cy - ball_before.y)
+    distance = math.hypot(*to_player)
+    speed = math.hypot(*velocity)
+    if distance <= 1e-6 or speed < RECOVERED_MIN_APPROACH_SPEED:
+        return False, 0.0
+    alignment = (velocity[0] * to_player[0] + velocity[1] * to_player[1]) / (speed * distance)
+    return alignment >= 0.35, alignment
+
+def _moving_away_from_player(ball_after, velocity, player):
+    cx, cy = _player_center(player)
+    from_player = (ball_after.x - cx, ball_after.y - cy)
+    distance = math.hypot(*from_player)
+    speed = math.hypot(*velocity)
+    if distance <= 1e-6 or speed < 2.0:
+        return False, 0.0
+    alignment = (velocity[0] * from_player[0] + velocity[1] * from_player[1]) / (speed * distance)
+    return alignment >= 0.15, alignment
+
+def _velocity_between(a, b):
+    span = b.frame - a.frame
+    if span <= 0:
+        return None
+    return (b.x - a.x) / span, (b.y - a.y) / span
+
+def _wide_velocity(ball_by_frame, frame, before=True):
+    inner = SOFT_VECTOR_INNER_FRAMES
+    outer = SOFT_VECTOR_OUTER_FRAMES
+    offsets = ((-outer, -inner), (-outer + 2, -inner + 1), (-outer + 4, -inner + 2)) if before else (
+        (inner, outer), (inner - 1, outer - 2), (inner - 2, outer - 4)
+    )
+    for first, second in offsets:
+        velocity = _velocity(ball_by_frame, frame, first, second)
+        if velocity:
+            return velocity
+    return None
+
+def _recovered_candidate(before, after, tracks):
+    gap = after.frame - before.frame
+    if gap < RECOVERED_MIN_GAP_FRAMES or gap > RECOVERED_MAX_GAP_FRAMES:
+        return None
+    player, proximity = _nearest_player(tracks.player_boxes, before.frame + gap // 2, before)
+    if not player or proximity > RECOVERED_MAX_PROXIMITY:
+        return None
+    path_distance = _point_to_segment_distance(
+        player.x + 0.5 * player.w, player.y + 0.5 * player.h,
+        before.x, before.y, after.x, after.y,
+    )
+    reach = max(45.0, 0.35 * math.hypot(player.w, player.h))
+    if path_distance / reach > RECOVERED_MAX_PROXIMITY:
+        return None
+
+    prev = tracks.image_ball.get(before.frame - 2) or tracks.image_ball.get(before.frame - 1)
+    nxt = tracks.image_ball.get(after.frame + 2) or tracks.image_ball.get(after.frame + 1)
+    incoming = _velocity_between(prev, before) if prev else None
+    outgoing = _velocity_between(after, nxt) if nxt else _velocity_between(before, after)
+    if not incoming or not outgoing:
+        return None
+
+    approaching, approach_alignment = _approaching_player(before, incoming, player)
+    away, away_alignment = _moving_away_from_player(after, outgoing, player)
+    toward_net = (before.y < after.y <= 0.62) or (before.y > after.y >= 0.38)
+    if not approaching or not (away or toward_net):
+        return None
+
+    confidence = min(
+        0.75,
+        0.55 + 0.10 * max(0.0, 1.0 - proximity)
+        + 0.06 * max(0.0, approach_alignment)
+        + 0.04 * max(0.0, away_alignment),
+    )
+    frame = before.frame + gap // 2
+    timestamp = before.timestamp + 0.5 * (after.timestamp - before.timestamp)
+    speed_before = math.hypot(*incoming)
+    speed_after = math.hypot(*outgoing)
+    impulse = math.hypot(outgoing[0] - incoming[0], outgoing[1] - incoming[1])
+    return ContactEpisode(
+        frame, timestamp, player.player_id, confidence, impulse, proximity,
+        speed_before, speed_after,
+        start_frame=before.frame, end_frame=after.frame, raw_count=1,
+        debug_reason=(
+            "recovered occlusion contact: "
+            f"player={player.player_id[-1]}; frame={frame}; "
+            "reason=ball disappeared near player and returned toward net"
+        ),
+    )
+
+def _soft_visible_candidate(frame, ball, tracks):
+    before = _wide_velocity(tracks.image_ball, frame, before=True)
+    after = _wide_velocity(tracks.image_ball, frame, before=False)
+    if not before or not after:
+        return None
+    player, proximity = _nearest_player(tracks.player_boxes, frame, ball)
+    if not player or proximity > SOFT_MAX_PROXIMITY:
+        return None
+    speed_before, speed_after = math.hypot(*before), math.hypot(*after)
+    if max(speed_before, speed_after) < 4.0:
+        return None
+    impulse = math.hypot(after[0] - before[0], after[1] - before[1])
+    dot = before[0] * after[0] + before[1] * after[1]
+    denom = max(1e-6, speed_before * speed_after)
+    angle_change = 1.0 - max(-1.0, min(1.0, dot / denom))
+    if impulse < SOFT_MIN_IMPULSE and angle_change < SOFT_MIN_ANGLE_CHANGE:
+        return None
+    confidence = min(
+        0.75,
+        0.56 + 0.08 * max(0.0, 1.0 - proximity)
+        + 0.07 * min(1.0, impulse / 24.0)
+        + 0.04 * min(1.0, angle_change),
+    )
+    return ContactEpisode(
+        frame, ball.timestamp, player.player_id, confidence, impulse, proximity,
+        speed_before, speed_after,
+        debug_reason=(
+            "recovered soft contact: "
+            f"player={player.player_id[-1]}; frame={frame}; "
+            "reason=wide-window trajectory change near player"
+        ),
+    )
+
+def _recovered_contacts(tracks, normal_contacts):
+    normal_by_frame = [(item.frame, item.player_id) for item in normal_contacts]
+    frames = sorted(tracks.image_ball)
+    recovered = []
+    for earlier, later in zip(frames, frames[1:]):
+        before, after = tracks.image_ball[earlier], tracks.image_ball[later]
+        candidate = _recovered_candidate(before, after, tracks)
+        if not candidate:
+            continue
+        if any(
+            player_id == candidate.player_id
+            and abs(frame - candidate.frame) <= RECOVERED_DUPLICATE_FRAMES
+            for frame, player_id in normal_by_frame
+        ):
+            continue
+        if any(
+            item.player_id == candidate.player_id
+            and abs(item.frame - candidate.frame) <= RECOVERED_DUPLICATE_FRAMES
+            for item in recovered
+        ):
+            continue
+        recovered.append(candidate)
+    for frame in frames:
+        candidate = _soft_visible_candidate(frame, tracks.image_ball[frame], tracks)
+        if not candidate:
+            continue
+        if any(
+            player_id == candidate.player_id
+            and abs(existing_frame - candidate.frame) <= RECOVERED_DUPLICATE_FRAMES
+            for existing_frame, player_id in normal_by_frame
+        ):
+            continue
+        if any(
+            item.player_id == candidate.player_id
+            and abs(item.frame - candidate.frame) <= RECOVERED_DUPLICATE_FRAMES
+            for item in recovered
+        ):
+            continue
+        recovered.append(candidate)
+    return recovered
 
 def detect_clip_boundaries(player_court, minimum_jump=0.25):
     by_player = {
@@ -127,4 +311,5 @@ def detect_contact_episodes(tracks, reset_frames=()):
             else:
                 groups.append([candidate])
         episodes.extend(_episode_choice(group) for group in groups)
+    episodes.extend(_recovered_contacts(tracks, episodes))
     return sorted(episodes, key=lambda item: item.frame)

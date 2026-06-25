@@ -6,7 +6,7 @@ from audio_commentary import generate_audio_commentary, mux_commentary_with_vide
 from draw import draw
 from pipeline_utils import ensure_output_dirs, organized_path
 
-video_path = "test.mp4"
+video_path = "test2.mp4"
 output_dir = "outputs"
 
 ensure_output_dirs(output_dir)

@@ -6,9 +6,9 @@ import cv2
 from pipeline_utils import ensure_output_dirs, organized_path, parse_number, validate_csv
 
 MIN_GAP_SECONDS = 0.12
-EVENT_DURATION_SECONDS = {"serve": 0.85, "hit": 0.55, "miss": 0.45, "point": 0.60}
+EVENT_DURATION_SECONDS = {"serve": 0.85, "hit": 0.55, "net": 0.55, "miss": 0.45, "point": 0.60}
 ALLOWED_LINE = re.compile(
-    r"^(?:[12] hit(?: (?:left|right|straight))?|"
+    r"^(?:[12] hit(?: (?:left|right|straight|the net))?|"
     r"[12] serve from (?:left|right|middle) to (?:left|right|middle)|"
     r"[12] miss|point to [12])$"
 )
