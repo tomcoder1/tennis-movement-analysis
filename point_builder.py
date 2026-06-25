@@ -396,10 +396,9 @@ def _hit_direction_detail(tracks, contact, end_frame, bounces=(), next_contact=N
         direction = "left"
     elif angle >= 15.0:
         direction = "right"
-    elif abs(angle) <= 10.0:
-        direction = "straight"
     else:
-        direction = ""
+        direction = "straight"
+
     return {
         "target_source": target_source, "start_frame": start.frame,
         "target_frame": target.frame, "start_x": start.x, "target_x": target_x, "dx": dx, "dy": dy,
