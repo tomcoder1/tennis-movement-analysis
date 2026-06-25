@@ -6,19 +6,21 @@ from audio_commentary import generate_audio_commentary, mux_commentary_with_vide
 from draw import draw
 from pipeline_utils import ensure_output_dirs, organized_path
 
-VIDEO_PATH = "test.mp4"
-OUTPUT_DIR = "outputs"
+video_path = "test.mp4"
+output_dir = "outputs"
 
-ensure_output_dirs(OUTPUT_DIR)
+ensure_output_dirs(output_dir)
 
-predictor(VIDEO_PATH, OUTPUT_DIR)
-run_homography(OUTPUT_DIR)
-extract_audio_description(OUTPUT_DIR)
-schedule_speech(OUTPUT_DIR, video_path=VIDEO_PATH)
-commentary_audio = generate_audio_commentary(OUTPUT_DIR, VIDEO_PATH)
-draw(VIDEO_PATH, OUTPUT_DIR)
+predictor(video_path, output_dir)
+run_homography(output_dir)
+extract_audio_description(output_dir)
+schedule_speech(output_dir, video_path=video_path)
+
+commentary_audio = generate_audio_commentary(output_dir, video_path)
+draw(video_path, output_dir)
+
 mux_commentary_with_video(
-    organized_path(OUTPUT_DIR, "out_video"),
+    organized_path(output_dir, "out_video"),
     commentary_audio,
-    OUTPUT_DIR,
+    output_dir,
 )

@@ -1,9 +1,6 @@
-"""Small shared helpers for pipeline paths and CSV validation."""
-
 import csv
 import math
 import os
-
 
 DETECTION_COLUMNS = {
     "frame_id", "timestamp", "source", "object_type", "object_id",
@@ -17,25 +14,25 @@ OUTPUT_LAYOUT = {
     "homography": ("geometry", "homography.csv"),
     "ball_homography": ("geometry", "ball_homography.csv"),
     "player_homography": ("geometry", "player_homography.csv"),
+    "contact_episodes": ("narration", "contact_episodes.csv"),
+    "bounce_events": ("narration", "bounce.csv"),
     "moments": ("narration", "moments.csv"),
     "scheduled_lines": ("narration", "scheduled_lines.csv"),
     "out_video": ("media", "out.mp4"),
     "described_video": ("media", "out_described.mp4"),
     "commentary_text": ("narration", "commentary.txt"),
     "commentary_srt": ("narration", "commentary.srt"),
+    "diagnosis_report": ("narration", "diagnosis_report.md"),
     "commentary_mp3": ("media", "commentary.mp3"),
     "commentary_wav": ("media", "commentary.wav"),
 }
 
-
 def organized_path(output_dir, key):
-    """Return the new organized output path for a known pipeline artifact."""
     try:
         folder, filename = OUTPUT_LAYOUT[key]
     except KeyError as exc:
         raise KeyError(f"Unknown pipeline output key: {key}") from exc
     return os.path.join(os.fspath(output_dir), folder, filename)
-
 
 def resolve_input_path(output_dir, key):
     """Prefer organized input paths, falling back to legacy flat outputs."""
@@ -69,7 +66,6 @@ def validate_video(path):
 
 
 def validate_csv(path, required_columns, previous_stage=None):
-    """Validate one pipeline CSV without loading its contents."""
     if not os.path.isfile(path):
         hint = f" Run the {previous_stage} stage first." if previous_stage else ""
         raise FileNotFoundError(f"Required CSV not found: {path}.{hint}")

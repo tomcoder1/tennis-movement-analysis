@@ -10,14 +10,9 @@ try:
 except ImportError:  # Allows CSV-only stages to run without model dependencies.
     YOLO = None
 
-
 from model import BallTracker, CourtTracker
 from read_video import read_video
 from pipeline_utils import ensure_output_dirs, organized_path, require_files, validate_video
-
-# ============================================================
-# CONFIG
-# ============================================================
 
 BALL_WEIGHTS = "model/model_best.pt"
 COURT_WEIGHTS = "model/Court_detect_model.pth"
@@ -37,9 +32,6 @@ PLAYER_IOU = 0.50
 PLAYER_IMG_SIZE = 640
 PLAYER_TRACKER = "bytetrack.yaml"
 
-# Ball tracking. The tracker deliberately does not use player boxes to
-# remove or keep ball candidates. Hidden-ball frames should stay blank unless
-# TrackNet produces a candidate that is consistent with the recent ball motion.
 BALL_HEATMAP_THRESHOLD = 127
 BALL_MIN_COMPONENT_AREA = 1
 BALL_MAX_COMPONENT_AREA = 250
@@ -71,10 +63,6 @@ PLAYABLE_REGION = np.array(
     dtype=np.float32,
 )
 
-
-# Normalized doubles-court template used only to reject false player detections.
-# x = 0 left doubles sideline, x = 1 right doubles sideline
-# y = 0 far baseline, y = 1 near baseline
 SINGLES_LEFT = 4.5 / 36.0
 SINGLES_RIGHT = 31.5 / 36.0
 FAR_SERVICE_Y = 18.0 / 78.0
@@ -99,9 +87,6 @@ COURT_TEMPLATE_BY_ID = {
     "court_14": (0.5, NET_Y),
 }
 
-# Foot positions outside this normalized court area are treated as non-players.
-# This removes ball kids, line judges, and spectators while still allowing real
-# players to stand slightly behind the baselines or just outside the doubles lines.
 PLAYER_COURT_X_MIN = -0.10
 PLAYER_COURT_X_MAX = 1.10
 PLAYER_COURT_Y_MIN = -0.30
@@ -140,7 +125,6 @@ def write_csv_header(writer):
         "confidence",
         "track_id",
     ])
-
 
 def is_valid_point(point):
     return point is not None and point[0] is not None and point[1] is not None
@@ -276,7 +260,6 @@ def build_player_filter_homography(court_points):
 
     return H
 
-
 def project_point_to_court(H, point):
     if H is None or point is None:
         return None
@@ -295,7 +278,6 @@ def project_point_to_court(H, point):
 
     return court_x, court_y
 
-
 def is_valid_player_court_point(court_point):
     if court_point is None:
         return False
@@ -306,7 +288,6 @@ def is_valid_player_court_point(court_point):
         PLAYER_COURT_X_MIN <= court_x <= PLAYER_COURT_X_MAX
         and PLAYER_COURT_Y_MIN <= court_y <= PLAYER_COURT_Y_MAX
     )
-
 
 def attach_court_positions_to_candidates(candidates, H):
     if H is None:
@@ -325,7 +306,6 @@ def attach_court_positions_to_candidates(candidates, H):
         filtered.append(item)
 
     return filtered
-
 
 def select_two_players(candidates, frame_width, frame_height):
     selected = {}
@@ -363,7 +343,6 @@ def select_two_players(candidates, frame_width, frame_height):
 
         return selected
 
-    # Fallback if court homography is not available.
     near_candidates = []
     far_candidates = []
 
@@ -445,7 +424,6 @@ def preprocess_ball_window(tracknet_window_bgr):
     stacked = np.expand_dims(stacked, axis=0)
 
     return torch.from_numpy(stacked).float().to(DEVICE)
-
 
 def model_output_to_heatmap(model_out):
     if isinstance(model_out, (tuple, list)):
@@ -570,7 +548,6 @@ def heatmap_to_ball_candidates(heatmap):
 
     candidates.sort(key=candidate_quality, reverse=True)
     return candidates
-
 
 def scale_ball_candidates(candidates, original_w, original_h):
     scale_x = original_w / INPUT_W
@@ -901,7 +878,6 @@ def save_ball_csv(ball_track, path_output_csv, fps):
             ])
 
 def predictor(VIDEO_PATH="test.mp4", output_dir="outputs", max_frames=None):
-    """Run model inference while keeping the original callable API compatible."""
     validate_video(VIDEO_PATH)
     require_files([BALL_WEIGHTS, COURT_WEIGHTS, PLAYER_WEIGHTS], "model weights")
     ensure_output_dirs(output_dir)

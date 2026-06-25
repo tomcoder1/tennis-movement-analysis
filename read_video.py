@@ -5,7 +5,6 @@ from typing import Iterator, Optional, List
 import cv2
 import numpy as np
 
-
 @dataclass
 class FramePacket:
     frame_id: int
@@ -13,7 +12,6 @@ class FramePacket:
     frame_bgr: np.ndarray
     tracknet_window_bgr: Optional[List[np.ndarray]]
     fps: float
-
 
 def read_video(video_path: str) -> Iterator[FramePacket]:
     cap = cv2.VideoCapture(video_path)
@@ -39,8 +37,6 @@ def read_video(video_path: str) -> Iterator[FramePacket]:
         tracknet_window = None
 
         if len(previous_frames) == 2:
-            # Explicit TrackNet order:
-            # current frame, previous frame, pre-previous frame
             tracknet_window = [
                 frame_bgr,
                 previous_frames[-1],

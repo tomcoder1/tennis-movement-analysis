@@ -179,7 +179,6 @@ def load_player_homography_by_frame(csv_path):
 
 
 def load_scheduled_lines(csv_path, fps):
-    """Load only narration lines selected by the speech scheduler."""
     lines_by_frame = defaultdict(list)
     if not os.path.exists(csv_path):
         return lines_by_frame
@@ -275,7 +274,6 @@ def draw_ball(frame, det):
 
 
 def draw_narration(frame, narration_lines):
-    """Render the same short text selected for speech."""
     height, width = frame.shape[:2]
     for index, line in enumerate(narration_lines[-2:]):
         description = line.get("text", "")
@@ -293,34 +291,17 @@ def draw_narration(frame, narration_lines):
 def clamp(value, min_value, max_value):
     return max(min_value, min(max_value, value))
 
-
 def homography_panel_layout(frame_width, frame_height):
-    margin = 20
+    margin = 0
     title_h = 50
 
-    max_panel_w = max(120, frame_width - 2 * margin)
-    max_panel_h = max(120, frame_height - title_h - margin)
-
-    preferred_w = min(460, max(300, frame_width // 4))
-    preferred_h = int(preferred_w * 1.75)
-
-    panel_w = min(preferred_w, max_panel_w)
-    panel_h = min(preferred_h, max_panel_h)
-
-    if panel_h < preferred_h:
-        panel_w = max(120, int(panel_h / 1.75))
+    panel_w = 260
+    panel_h = 455
 
     x0 = frame_width - panel_w - margin
     y0 = title_h
 
-    if x0 < margin:
-        x0 = margin
-
-    if y0 + panel_h + margin > frame_height:
-        y0 = max(margin, frame_height - panel_h - margin)
-
     return int(x0), int(y0), int(panel_w), int(panel_h)
-
 
 def point_in_view(court_x, court_y):
     return (
