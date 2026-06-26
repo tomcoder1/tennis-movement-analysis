@@ -14,6 +14,9 @@ SOFT_VECTOR_OUTER_FRAMES = 10
 SOFT_MAX_PROXIMITY = 1.25
 SOFT_MIN_IMPULSE = 6.0
 SOFT_MIN_ANGLE_CHANGE = 0.30
+COURT_MAX_PROXIMITY = 0.22
+COURT_MIN_SPEED = 0.015
+COURT_MIN_DIRECTION_CHANGE = 0.20
 
 @dataclass(frozen=True)
 class ContactEpisode:
@@ -30,6 +33,9 @@ class ContactEpisode:
     raw_count: int = 1
     precheck_reason: str = ""
     debug_reason: str = ""
+    contact_source: str = "image"
+    court_proximity: float = 0.0
+    court_direction_change: float = 0.0
 
 def _velocity(ball_by_frame, frame, first, second):
     a, b = ball_by_frame.get(frame + first), ball_by_frame.get(frame + second)
@@ -37,6 +43,67 @@ def _velocity(ball_by_frame, frame, first, second):
         return None
     span = second - first
     return (b.x - a.x) / span, (b.y - a.y) / span
+
+def _nearest_point(points, frame, window=3):
+    nearby = [point for point in points if abs(point.frame - frame) <= window]
+    return min(nearby, key=lambda point: abs(point.frame - frame)) if nearby else None
+
+def _court_velocity(tracks, frame, first, second):
+    a = tracks.ball_court_by_frame.get(frame + first)
+    b = tracks.ball_court_by_frame.get(frame + second)
+    if not a or not b:
+        return None
+    span = second - first
+    return (b.x - a.x) / span, (b.y - a.y) / span
+
+def _court_evidence(tracks, frame, player_id):
+    ball = tracks.ball_court_by_frame.get(frame)
+    player = _nearest_point(tracks.player_court.get(player_id, []), frame, window=4)
+    before = _court_velocity(tracks, frame, -3, 0)
+    after = _court_velocity(tracks, frame, 0, 3)
+    if not ball or not player or not before or not after:
+        return None
+
+    proximity = math.hypot(ball.x - player.x, ball.y - player.y)
+    speed_before, speed_after = math.hypot(*before), math.hypot(*after)
+    if max(speed_before, speed_after) < COURT_MIN_SPEED:
+        return None
+
+    dot = before[0] * after[0] + before[1] * after[1]
+    denom = max(1e-6, speed_before * speed_after)
+    direction_change = 1.0 - max(-1.0, min(1.0, dot / denom))
+
+    to_player = (player.x - ball.x, player.y - ball.y)
+    from_player = (ball.x - player.x, ball.y - player.y)
+    to_len = max(1e-6, math.hypot(*to_player))
+    from_len = max(1e-6, math.hypot(*from_player))
+    approach = (before[0] * to_player[0] + before[1] * to_player[1]) / (speed_before * to_len)
+    away = (after[0] * from_player[0] + after[1] * from_player[1]) / (speed_after * from_len)
+
+    near = proximity <= COURT_MAX_PROXIMITY
+    changed = direction_change >= COURT_MIN_DIRECTION_CHANGE
+    player_side_change = before[1] * after[1] < 0
+    plausible = near and (changed or player_side_change) and (approach > -0.25 or away > -0.25)
+
+    confidence = 0.0
+    if plausible:
+        confidence = min(
+            0.82,
+            0.52
+            + 0.16 * max(0.0, 1.0 - proximity / COURT_MAX_PROXIMITY)
+            + 0.10 * min(1.0, direction_change)
+            + 0.04 * max(0.0, approach)
+            + 0.04 * max(0.0, away),
+        )
+
+    return {
+        "plausible": plausible,
+        "confidence": confidence,
+        "proximity": proximity,
+        "direction_change": direction_change,
+        "speed_before": speed_before,
+        "speed_after": speed_after,
+    }
 
 def _nearest_player(player_boxes, frame, ball):
     candidates = []
@@ -68,7 +135,14 @@ def _candidate(frame, ball, tracks):
     if max(speed_before, speed_after) < 4.0:
         return None
     if not changed and impulse < 5.0:
-        return None
+        court = None
+        player, proximity = _nearest_player(tracks.player_boxes, frame, ball)
+        if player:
+            court = _court_evidence(tracks, frame, player.player_id)
+        if not court or not court["plausible"]:
+            return None
+    else:
+        court = None
     reason = ""
     if proximity > MAX_PROXIMITY:
         reason = "weak player proximity"
@@ -79,9 +153,28 @@ def _candidate(frame, ball, tracks):
         0.42 + 0.28 * min(1.0, impulse / 30.0)
         + 0.18 * player.confidence + 0.10 * max(0.0, 1.0 - proximity),
     )
+    if court is None:
+        court = _court_evidence(tracks, frame, player.player_id)
+    contact_source = "image"
+    court_proximity = 0.0
+    court_direction_change = 0.0
+    if court:
+        court_proximity = court["proximity"]
+        court_direction_change = court["direction_change"]
+        if court["plausible"]:
+            confidence = min(0.98, max(confidence, court["confidence"]) + 0.04)
+            contact_source = "hybrid"
+        elif proximity > MAX_PROXIMITY or impulse < MIN_IMPULSE:
+            reason = reason or "weak court confirmation"
+    if getattr(ball, "state", "observed") != "observed":
+        confidence = min(confidence, 0.72)
+        reason = reason or "interpolated ball contact"
     return ContactEpisode(
         frame, ball.timestamp, player.player_id, confidence, impulse, proximity,
         speed_before, speed_after, precheck_reason=reason,
+        contact_source=contact_source,
+        court_proximity=court_proximity,
+        court_direction_change=court_direction_change,
     )
 
 def _episode_choice(group):
@@ -93,7 +186,8 @@ def _episode_choice(group):
         best.frame, best.timestamp, best.player_id, best.confidence, best.impulse,
         best.proximity, best.speed_before, best.speed_after,
         min(item.frame for item in group), max(item.frame for item in group), len(group),
-        best.precheck_reason, best.debug_reason,
+        best.precheck_reason, best.debug_reason, best.contact_source,
+        best.court_proximity, best.court_direction_change,
     )
 
 def _player_center(player):
@@ -193,6 +287,7 @@ def _recovered_candidate(before, after, tracks):
             f"player={player.player_id[-1]}; frame={frame}; "
             "reason=ball disappeared near player and returned toward net"
         ),
+        contact_source="gap_recovery",
     )
 
 def _soft_visible_candidate(frame, ball, tracks):
@@ -226,6 +321,7 @@ def _soft_visible_candidate(frame, ball, tracks):
             f"player={player.player_id[-1]}; frame={frame}; "
             "reason=wide-window trajectory change near player"
         ),
+        contact_source="wide_window",
     )
 
 def _recovered_contacts(tracks, normal_contacts):

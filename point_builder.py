@@ -108,6 +108,26 @@ def _nearest_point(points, frame, window=3):
     return min(nearby, key=lambda point: abs(point.frame - frame)) if nearby else None
 
 def _ball_left_and_returned(tracks, previous, current):
+    from_bottom = _player_from_bottom(tracks, previous.player_id, previous.frame)
+    if from_bottom is not None:
+        points = [
+            point for point in tracks.ball_court
+            if previous.frame + 4 <= point.frame <= current.frame - 4
+            and point.confidence >= 0.45
+        ]
+        current_point = _nearest_point(tracks.ball_court, current.frame, window=4)
+        if points and current_point:
+            opponent_side_seen = any(
+                point.y <= 0.5 - RECEIVER_SIDE_MARGIN
+                if from_bottom else point.y >= 0.5 + RECEIVER_SIDE_MARGIN
+                for point in points
+            )
+            returned_to_hitter_side = (
+                current_point.y >= 0.5 + RECEIVER_SIDE_MARGIN
+                if from_bottom else current_point.y <= 0.5 - RECEIVER_SIDE_MARGIN
+            )
+            return opponent_side_seen, returned_to_hitter_side
+
     origin = tracks.image_ball.get(previous.frame)
     destination = tracks.image_ball.get(current.frame)
     if not origin or not destination or current.frame - previous.frame < 12:
@@ -246,6 +266,9 @@ def _validate_segment(tracks, episodes):
         if same_player and elapsed < DUPLICATE_SECONDS:
             reason = "serve follow-through duplicate" if previous.event_type == "serve" else "duplicate same-player contact"
             rejected.append(RejectedContact(episode, reason))
+            continue
+        if same_player:
+            rejected.append(RejectedContact(episode, "missing opponent contact before same-player"))
             continue
         recovery_ok, recovery_reason = _expected_hitter_recovery_allowed(
             tracks, previous, episode, expected_hitter,
@@ -396,8 +419,10 @@ def _hit_direction_detail(tracks, contact, end_frame, bounces=(), next_contact=N
         direction = "left"
     elif angle >= 15.0:
         direction = "right"
-    else:
+    elif abs(angle) <= 10:
         direction = "straight"
+    else:
+        direction = ""
 
     return {
         "target_source": target_source, "start_frame": start.frame,
@@ -724,6 +749,13 @@ def _terminal(tracks, action, boundary, bounces):
         or _no_return_miss(tracks, action, boundary, bounces)
     )
 
+def _terminal_description(terminal):
+    if terminal.miss_type == "net":
+        return f"{terminal.loser} hit the net"
+    if terminal.miss_type == "out":
+        return f"{terminal.loser} hit out"
+    return f"{terminal.loser} can't hit"
+
 def build_events(tracks, episodes, bounces, reset_frames):
     segments, rejected = build_point_sequence(tracks, episodes, reset_frames, bounces)
     events, accepted, miss_types = [], [], Counter()
@@ -753,11 +785,7 @@ def build_events(tracks, episodes, bounces, reset_frames):
             continue
         miss_types[terminal.miss_type] += 1
         terminal_type = "net" if terminal.miss_type == "net" else "miss"
-        terminal_description = (
-            f"{terminal.loser} hit the net"
-            if terminal.miss_type == "net" else
-            f"{terminal.loser} miss"
-        )
+        terminal_description = _terminal_description(terminal)
         events.append(Event(
             terminal.frame, terminal.timestamp, terminal_type, terminal.loser,
             terminal.confidence, terminal_description, terminal.reason,

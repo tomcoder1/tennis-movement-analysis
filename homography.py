@@ -8,7 +8,7 @@ from typing import Dict, Optional, Tuple
 import cv2
 import numpy as np
 from pipeline_utils import (
-    DETECTION_COLUMNS, ensure_output_dirs, organized_path, parse_number,
+    DETECTION_COLUMNS, ensure_output_dirs, organized_path, parse_int, parse_number,
     resolve_input_path, validate_csv,
 )
 
@@ -56,15 +56,6 @@ class HomographyResult:
     reprojection_error: Optional[float]
     timestamp: float
 
-def parse_float(value):
-    return parse_number(value)
-
-def parse_int(value, default=0):
-    number = parse_number(value)
-    if number is None:
-        return default
-    return int(number)
-
 def load_csv_by_frame(csv_path):
     by_frame = defaultdict(list)
 
@@ -79,15 +70,15 @@ def load_csv_by_frame(csv_path):
 
             item = {
                 "frame_id": frame_id,
-                "timestamp": parse_float(row.get("timestamp")) or 0.0,
+                "timestamp": parse_number(row.get("timestamp")) or 0.0,
                 "source": row.get("source", ""),
                 "object_type": row.get("object_type", ""),
                 "object_id": row.get("object_id", ""),
-                "x": parse_float(row.get("x")),
-                "y": parse_float(row.get("y")),
-                "w": parse_float(row.get("w")),
-                "h": parse_float(row.get("h")),
-                "confidence": parse_float(row.get("confidence")) or 0.0,
+                "x": parse_number(row.get("x")),
+                "y": parse_number(row.get("y")),
+                "w": parse_number(row.get("w")),
+                "h": parse_number(row.get("h")),
+                "confidence": parse_number(row.get("confidence")) or 0.0,
                 "track_id": row.get("track_id", ""),
             }
 

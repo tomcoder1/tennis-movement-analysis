@@ -15,6 +15,7 @@ OUTPUT_LAYOUT = {
     "ball_homography": ("geometry", "ball_homography.csv"),
     "player_homography": ("geometry", "player_homography.csv"),
     "contact_episodes": ("narration", "contact_episodes.csv"),
+    "contact_debug": ("narration", "contact_debug.csv"),
     "bounce_events": ("narration", "bounce.csv"),
     "moments": ("narration", "moments.csv"),
     "scheduled_lines": ("narration", "scheduled_lines.csv"),
@@ -56,6 +57,13 @@ def parse_number(value):
     except (TypeError, ValueError):
         return None
     return number if math.isfinite(number) else None
+
+
+def parse_int(value, default=0):
+    number = parse_number(value)
+    if number is None:
+        return default
+    return int(number)
 
 
 def validate_video(path):

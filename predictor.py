@@ -23,7 +23,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 INPUT_H = 360
 INPUT_W = 640
 
-COURT_DETECTION_INTERVAL_FRAMES = 10
+COURT_DETECTION_INTERVAL_FRAMES = 1
 
 MAX_FRAMES = None
 

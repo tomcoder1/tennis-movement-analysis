@@ -1,11 +1,10 @@
 import os
 import csv
-import math
 import cv2
 from collections import defaultdict
 from pipeline_utils import (
-    DETECTION_COLUMNS, ensure_output_dirs, organized_path, resolve_input_path,
-    validate_csv, validate_video,
+    DETECTION_COLUMNS, ensure_output_dirs, organized_path, parse_int, parse_number,
+    resolve_input_path, validate_csv, validate_video,
 )
 
 BALL_COLOR = (0, 255, 255)
@@ -35,29 +34,6 @@ HOMOGRAPHY_VIEW_X_MAX = 1.50
 HOMOGRAPHY_VIEW_Y_MIN = -0.85
 HOMOGRAPHY_VIEW_Y_MAX = 1.35
 
-def parse_float(value):
-    if value is None or value == "":
-        return None
-
-    try:
-        value = float(value)
-    except (TypeError, ValueError):
-        return None
-
-    if not math.isfinite(value):
-        return None
-
-    return value
-
-def parse_int(value, default=0):
-    if value is None or value == "":
-        return default
-
-    try:
-        return int(float(value))
-    except (TypeError, ValueError):
-        return default
-
 def load_csv_by_frame(csv_path):
     detections_by_frame = defaultdict(list)
 
@@ -72,15 +48,15 @@ def load_csv_by_frame(csv_path):
 
             det = {
                 "frame_id": frame_id,
-                "timestamp": parse_float(row.get("timestamp")) or 0.0,
+                "timestamp": parse_number(row.get("timestamp")) or 0.0,
                 "source": row.get("source", ""),
                 "object_type": row.get("object_type", ""),
                 "object_id": row.get("object_id", ""),
-                "x": parse_float(row.get("x")),
-                "y": parse_float(row.get("y")),
-                "w": parse_float(row.get("w")),
-                "h": parse_float(row.get("h")),
-                "confidence": parse_float(row.get("confidence")) or 0.0,
+                "x": parse_number(row.get("x")),
+                "y": parse_number(row.get("y")),
+                "w": parse_number(row.get("w")),
+                "h": parse_number(row.get("h")),
+                "confidence": parse_number(row.get("confidence")) or 0.0,
                 "track_id": row.get("track_id", ""),
             }
 
@@ -100,21 +76,21 @@ def load_ball_by_frame(csv_path):
         for row in reader:
             frame_id = parse_int(row.get("frame_id"))
 
-            x = parse_float(row.get("x"))
-            y = parse_float(row.get("y"))
+            x = parse_number(row.get("x"))
+            y = parse_number(row.get("y"))
 
             if x is None or y is None:
                 continue
 
             ball_by_frame[frame_id] = {
                 "frame_id": frame_id,
-                "timestamp": parse_float(row.get("timestamp")) or 0.0,
+                "timestamp": parse_number(row.get("timestamp")) or 0.0,
                 "source": row.get("source", "tracknet"),
                 "object_type": "ball",
                 "object_id": "ball",
                 "x": x,
                 "y": y,
-                "confidence": parse_float(row.get("confidence")) or 0.0,
+                "confidence": parse_number(row.get("confidence")) or 0.0,
             }
 
     return ball_by_frame
@@ -131,18 +107,18 @@ def load_ball_homography_by_frame(csv_path):
         for row in reader:
             frame_id = parse_int(row.get("frame_id"))
             valid = parse_int(row.get("valid"), 0) == 1
-            court_x = parse_float(row.get("court_x"))
-            court_y = parse_float(row.get("court_y"))
+            court_x = parse_number(row.get("court_x"))
+            court_y = parse_number(row.get("court_y"))
 
             if not valid or court_x is None or court_y is None:
                 continue
 
             ball_by_frame[frame_id] = {
                 "frame_id": frame_id,
-                "timestamp": parse_float(row.get("timestamp")) or 0.0,
+                "timestamp": parse_number(row.get("timestamp")) or 0.0,
                 "court_x": court_x,
                 "court_y": court_y,
-                "confidence": parse_float(row.get("confidence")) or 0.0,
+                "confidence": parse_number(row.get("confidence")) or 0.0,
             }
 
     return ball_by_frame
@@ -159,19 +135,19 @@ def load_player_homography_by_frame(csv_path):
         for row in reader:
             frame_id = parse_int(row.get("frame_id"))
             valid = parse_int(row.get("valid"), 0) == 1
-            court_x = parse_float(row.get("court_x"))
-            court_y = parse_float(row.get("court_y"))
+            court_x = parse_number(row.get("court_x"))
+            court_y = parse_number(row.get("court_y"))
 
             if not valid or court_x is None or court_y is None:
                 continue
 
             players_by_frame[frame_id].append({
                 "frame_id": frame_id,
-                "timestamp": parse_float(row.get("timestamp")) or 0.0,
+                "timestamp": parse_number(row.get("timestamp")) or 0.0,
                 "player_id": row.get("player_id", ""),
                 "court_x": court_x,
                 "court_y": court_y,
-                "confidence": parse_float(row.get("confidence")) or 0.0,
+                "confidence": parse_number(row.get("confidence")) or 0.0,
                 "track_id": row.get("track_id", ""),
             })
 
@@ -187,8 +163,8 @@ def load_scheduled_lines(csv_path, fps):
         for row in csv.DictReader(f):
             if str(row.get("was_skipped", "")).lower() == "true":
                 continue
-            start = parse_float(row.get("start_timestamp"))
-            end = parse_float(row.get("end_timestamp"))
+            start = parse_number(row.get("start_timestamp"))
+            end = parse_number(row.get("end_timestamp"))
             text = row.get("spoken_text", "").strip()
             if start is None or not text:
                 continue

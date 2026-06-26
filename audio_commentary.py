@@ -17,7 +17,7 @@ from pipeline_utils import (
     validate_csv,
 )
 
-TTS_RATE = 260
+TTS_RATE = 267
 TTS_VOLUME = 1.0
 TTS_VOICE_CONTAINS = ""
 

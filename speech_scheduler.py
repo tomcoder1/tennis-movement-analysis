@@ -10,7 +10,7 @@ EVENT_DURATION_SECONDS = {"serve": 0.85, "hit": 0.55, "net": 0.55, "miss": 0.45,
 ALLOWED_LINE = re.compile(
     r"^(?:[12] hit(?: (?:left|right|straight|the net))?|"
     r"[12] serve from (?:left|right|middle) to (?:left|right|middle)|"
-    r"[12] miss|point to [12])$"
+    r"[12] (?:miss|hit out|can't hit)|point to [12])$"
 )
 SCHEDULE_FIELDS = [
     "line_id", "start_timestamp", "end_timestamp", "moment_type", "player_id", "text_spoken",
