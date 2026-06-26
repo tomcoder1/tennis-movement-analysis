@@ -23,7 +23,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 INPUT_H = 360
 INPUT_W = 640
 
-COURT_DETECTION_INTERVAL_FRAMES = 1
+COURT_DETECTION_INTERVAL_FRAMES = 15
 
 MAX_FRAMES = None
 
@@ -125,7 +125,6 @@ def write_csv_header(writer):
         "confidence",
         "track_id",
     ])
-
 
 def is_valid_point(point):
     return point is not None and point[0] is not None and point[1] is not None
@@ -261,7 +260,6 @@ def build_player_filter_homography(court_points):
 
     return H
 
-
 def project_point_to_court(H, point):
     if H is None or point is None:
         return None
@@ -280,7 +278,6 @@ def project_point_to_court(H, point):
 
     return court_x, court_y
 
-
 def is_valid_player_court_point(court_point):
     if court_point is None:
         return False
@@ -291,7 +288,6 @@ def is_valid_player_court_point(court_point):
         PLAYER_COURT_X_MIN <= court_x <= PLAYER_COURT_X_MAX
         and PLAYER_COURT_Y_MIN <= court_y <= PLAYER_COURT_Y_MAX
     )
-
 
 def attach_court_positions_to_candidates(candidates, H):
     if H is None:
@@ -310,7 +306,6 @@ def attach_court_positions_to_candidates(candidates, H):
         filtered.append(item)
 
     return filtered
-
 
 def select_two_players(candidates, frame_width, frame_height):
     selected = {}
@@ -430,7 +425,6 @@ def preprocess_ball_window(tracknet_window_bgr):
     stacked = np.expand_dims(stacked, axis=0)
 
     return torch.from_numpy(stacked).float().to(DEVICE)
-
 
 def model_output_to_heatmap(model_out):
     if isinstance(model_out, (tuple, list)):
@@ -555,7 +549,6 @@ def heatmap_to_ball_candidates(heatmap):
 
     candidates.sort(key=candidate_quality, reverse=True)
     return candidates
-
 
 def scale_ball_candidates(candidates, original_w, original_h):
     scale_x = original_w / INPUT_W
