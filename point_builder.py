@@ -633,7 +633,9 @@ def _missed_receiver_net_fail(tracks, action, boundary, bounces):
     reached_net = _net_reach(points)
     if not reached_net:
         return None
-    reached_receiver = receiver_side[0] if receiver_side else reached_net
+    if not receiver_side:
+        return None
+    reached_receiver = receiver_side[0]
     receiver_bounces = []
     for bounce in bounces:
         if not reached_net.frame <= bounce.frame < boundary:
