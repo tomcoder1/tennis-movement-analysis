@@ -1,0 +1,23 @@
+line_id,start_timestamp,end_timestamp,moment_type,player_id,text_spoken
+L0001,3.733333,4.583333,serve,1,1 serve from right to left
+L0002,4.703333,5.253333,hit,2,2 hit straight
+L0003,5.566667,6.116667,hit,1,1 hit right
+L0004,6.833333,7.383333,hit,2,2 hit left
+L0005,8.700000,9.250000,hit,1,1 hit
+L0006,9.666667,10.216667,hit,2,2 hit
+L0007,10.433333,10.983333,net,1,1 hit the net
+L0008,11.103333,11.703333,point,2,point to 2
+L0009,11.823333,12.673333,serve,1,1 serve from middle to right
+L0010,12.793333,13.343333,hit,2,2 hit left
+L0011,14.633333,15.183333,hit,1,1 hit straight
+L0012,15.866667,16.416667,hit,2,2 hit right
+L0013,17.333333,17.883333,hit,1,1 hit straight
+L0014,18.033333,18.483333,miss,2,2 can't hit
+L0015,18.603333,19.203333,point,1,point to 1
+L0016,19.733333,20.583333,serve,1,1 serve from left to right
+L0017,23.300000,23.850000,hit,2,2 hit left
+L0018,24.966667,25.516667,hit,1,1 hit right
+L0019,26.333333,26.883333,hit,2,2 hit straight
+L0020,27.633333,28.183333,hit,1,1 hit left
+L0021,28.303333,28.753333,miss,2,2 can't hit
+L0022,28.873333,29.473333,point,1,point to 1

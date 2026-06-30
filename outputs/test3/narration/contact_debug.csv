@@ -1,0 +1,10 @@
+source_event_id,frame_id,timestamp,player_id,accepted,event_type,confidence,reason,contact_source,ball_state,nearest_player,distance_to_player,speed_before,speed_after,direction_change,court_x,court_y,court_proximity,court_direction_change,homography_status,player_identity_source
+C0001,20,0.666667,1,1,serve,0.916051,first valid contact in clip,image,observed,1,0.433062,6.403124,39.962482,41.231056,0.636817,0.605533,0.370861,1.652550,valid,persistent_id
+C0002,47,1.566667,2,1,hit,0.697739,contact by expected receiver,image,observed,2,0.218195,7.106335,3.716517,8.189170,0.200055,-0.380743,0.261437,1.736054,valid,persistent_id
+C0003,60,2.000000,2,0,,0.615703,duplicate same-player contact,wide_window,observed,2,1.130887,9.200502,27.732321,18.814515,0.224797,0.052971,0.000000,0.000000,valid,persistent_id
+C0004,83,2.766667,1,1,hit,0.965086,contact by expected receiver,hybrid,observed,1,0.413555,15.402922,68.352030,81.616481,0.383956,0.928745,0.133032,1.838902,valid,persistent_id
+C0005,106,3.533333,2,1,hit,0.606146,contact by expected receiver,wide_window,observed,2,1.227849,11.652275,4.164966,9.898464,0.722031,0.004449,0.000000,0.000000,valid,persistent_id
+C0006,125,4.166667,2,0,,0.769871,duplicate same-player contact,image,observed,2,0.431261,6.184658,8.749603,14.553541,0.881164,-0.312897,0.251140,1.980093,valid,persistent_id
+C0007,164,5.466667,1,0,,0.924823,classified bounce overlap,hybrid,observed,1,0.841814,14.866069,47.074409,60.207973,0.486876,0.944804,0.179728,1.869118,valid,persistent_id
+C0008,201,6.700000,2,0,,0.727016,missing opponent contact before same-player,image,observed,2,0.689798,4.031129,7.892401,11.901260,0.263992,-0.352147,0.262493,1.997002,valid,persistent_id
+C0009,236,7.866667,1,1,hit,0.935540,contact by expected receiver,hybrid,observed,1,0.695370,17.442764,64.352545,81.636389,0.550968,0.968591,0.169759,1.995298,valid,persistent_id

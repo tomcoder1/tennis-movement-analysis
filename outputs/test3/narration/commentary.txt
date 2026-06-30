@@ -1,0 +1,7 @@
+1 serve from right to left
+2 hit straight
+1 hit right
+2 hit
+1 hit left
+2 can't hit
+point to 1

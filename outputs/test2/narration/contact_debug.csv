@@ -1,0 +1,15 @@
+source_event_id,frame_id,timestamp,player_id,accepted,event_type,confidence,reason,contact_source,ball_state,nearest_player,distance_to_player,speed_before,speed_after,direction_change,court_x,court_y,court_proximity,court_direction_change,homography_status,player_identity_source
+C0001,55,1.833333,1,1,serve,0.829111,first valid contact in clip,image,observed,1,0.113062,13.000000,29.068884,16.124515,0.470065,0.752396,0.263216,0.008296,valid,persistent_id
+C0002,81,2.700000,1,0,,0.670000,serve follow-through duplicate,wide_window,observed,1,1.183583,4.201555,22.498072,26.022361,0.393830,0.436819,0.000000,0.000000,valid,persistent_id
+C0003,119,3.966667,2,1,hit,0.679776,contact by expected receiver,image,observed,2,1.100573,18.124569,9.604686,9.124144,0.686160,-0.334273,0.000000,0.000000,valid,persistent_id
+C0004,136,4.533333,1,1,hit,0.619789,contact by expected receiver,wide_window,observed,1,1.247961,22.911097,13.480901,16.458978,0.385929,0.617122,0.000000,0.000000,valid,persistent_id
+C0005,154,5.133333,1,0,,0.922933,duplicate same-player contact,image,observed,1,0.461941,10.793517,50.796161,53.265843,0.194050,0.780928,0.299665,0.959201,valid,persistent_id
+C0006,190,6.333333,2,1,hit,0.766613,contact by expected receiver,image,observed,2,0.303364,6.041523,15.558920,11.822859,0.218409,-0.320637,0.205938,1.566256,valid,persistent_id
+C0007,210,7.000000,1,1,hit,0.858296,contact by expected receiver,image,observed,1,0.696651,51.703482,25.932605,25.869867,0.712956,0.674517,0.000000,0.000000,valid,persistent_id
+C0008,254,8.466667,2,1,hit,0.753585,contact by expected receiver,image,observed,2,0.216119,4.301163,9.753917,9.546669,0.633360,-0.352645,0.224274,1.521209,valid,persistent_id
+C0009,291,9.700000,1,1,hit,0.959231,contact by expected receiver,image,observed,1,0.000000,17.117243,64.845971,49.091751,0.248699,0.897878,0.221331,0.056822,valid,persistent_id
+C0010,326,10.866667,2,1,hit,0.606859,contact by expected receiver,wide_window,observed,2,1.066390,6.144518,6.676279,7.272484,0.578641,-0.174112,0.000000,0.000000,valid,persistent_id
+C0011,339,11.300000,2,0,,0.742512,duplicate same-player contact,image,observed,2,0.426528,15.051993,24.423349,9.864710,0.676280,-0.045970,0.077564,0.000620,valid,persistent_id
+C0012,365,12.166667,1,1,hit,0.975075,contact by expected receiver,hybrid,observed,1,0.335326,29.516944,47.850026,77.043007,0.816146,1.010223,0.210877,1.998972,valid,persistent_id
+C0013,382,12.733333,2,1,hit,0.645442,contact by expected receiver,wide_window,observed,2,1.087476,37.870112,8.000000,33.558090,0.517715,0.100049,0.000000,0.000000,valid,persistent_id
+C0014,407,13.566667,2,0,,0.871162,duplicate same-player contact,image,observed,2,0.709149,5.408327,24.086073,28.555015,0.292806,-0.354631,0.280191,1.739672,valid,persistent_id

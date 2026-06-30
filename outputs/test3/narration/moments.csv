@@ -1,0 +1,8 @@
+moment_id,start_timestamp,end_timestamp,moment_type,player_id,description,confidence,reason,source_event_id
+M0001,0.666667,0.866667,serve,1,1 serve from right to left,0.916051,first valid contact in clip,E0001
+M0002,1.566667,1.766667,hit,2,2 hit straight,0.697739,contact by expected receiver; hit_direction target_source=bounce start_frame=47 target_frame=75 start_x=0.2001 target_x=0.3514 dx=0.1514 dy=1.2141 angle_deg=7.1074 final_direction=straight,E0002
+M0003,2.766667,2.966667,hit,1,1 hit right,0.965086,contact by expected receiver; hit_direction target_source=before_next_contact start_frame=83 target_frame=100 start_x=0.3840 target_x=0.6556 dx=0.2716 dy=-0.8553 angle_deg=17.6181 final_direction=right,E0003
+M0004,3.533333,3.733333,hit,2,2 hit,0.606146,contact by expected receiver; recovered soft contact: player=2; frame=106; reason=wide-window trajectory change near player; hit_direction target_source=bounce start_frame=106 target_frame=154 start_x=0.7220 target_x=0.5349 dx=-0.1871 dy=0.8593 angle_deg=-12.2845 final_direction=plain,E0004
+M0005,7.866667,8.066667,hit,1,1 hit left,0.935540,contact by expected receiver; hit_direction target_source=bounce start_frame=236 target_frame=258 start_x=0.5510 target_x=0.2156 dx=-0.3354 dy=-0.7865 angle_deg=-23.0918 final_direction=left,E0005
+M0006,8.600000,8.800000,miss,2,2 can't hit,0.780000,ball reached receiver side without valid return before clip ended,E0006
+M0007,9.150000,9.350000,point,1,point to 1,0.780000,ball reached receiver side without valid return before clip ended,E0007

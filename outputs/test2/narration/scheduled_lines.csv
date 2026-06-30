@@ -1,0 +1,13 @@
+line_id,start_timestamp,end_timestamp,moment_type,player_id,text_spoken
+L0001,1.833333,2.683333,serve,1,1 serve from left to right
+L0002,3.966667,4.516667,hit,2,2 hit left
+L0003,4.636667,5.186667,hit,1,1 hit straight
+L0004,6.333333,6.883333,hit,2,2 hit right
+L0005,7.003333,7.553333,hit,1,1 hit straight
+L0006,8.466667,9.016667,hit,2,2 hit
+L0007,9.700000,10.250000,hit,1,1 hit right
+L0008,10.866667,11.416667,hit,2,2 hit straight
+L0009,12.166667,12.716667,hit,1,1 hit left
+L0010,12.836667,13.386667,hit,2,2 hit left
+L0011,14.500000,14.950000,miss,1,1 can't hit
+L0012,15.070000,15.670000,point,2,point to 2

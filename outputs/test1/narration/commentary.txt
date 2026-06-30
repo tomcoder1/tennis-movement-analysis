@@ -1,0 +1,22 @@
+1 serve from right to left
+2 hit straight
+1 hit right
+2 hit left
+1 hit
+2 hit
+1 hit the net
+point to 2
+1 serve from middle to right
+2 hit left
+1 hit straight
+2 hit right
+1 hit straight
+2 can't hit
+point to 1
+1 serve from left to right
+2 hit left
+1 hit right
+2 hit straight
+1 hit left
+2 can't hit
+point to 1
