@@ -1,8 +1,13 @@
 /runs/
-/training/
 .venv
 __pycache__/
 *.py[cod]
 .pytest_cache/
 test/
 report/
+training/ball/dataset/
+training/ball/dataset.zip
+training/player/dataset_player/
+training/player/outputs/
+training/player/runs/
+training/player/videos/
